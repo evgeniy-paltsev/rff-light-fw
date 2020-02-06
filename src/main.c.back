@@ -1,0 +1,492 @@
+/*
+ * Copyright (c) 2012-2014 Wind River Systems, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr.h>
+#include <sys/printk.h>
+#include <drivers/uart.h>
+#include <drivers/gpio.h>
+#include <sys/__assert.h>
+#include <kernel.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "pwm/tim3-pwm.h"
+#include "rtc/rtc-ctl.h"
+
+#define str(a) #a
+#define xstr(a) str(a)
+
+static struct host_cmd {
+	uint32_t		delay_sec;
+} host_cmd_curr;
+
+static void signal_led_worker(void);
+
+static struct signal_led_ctx {
+	/* private */
+	struct device		*gpio_dev;
+
+	/* public */
+	uint16_t		led_on_time;
+	uint16_t		led_off_time;
+	uint16_t		led_blink_count;
+} signal_led;
+
+/* minimum priority */
+#define SIGNAL_LED_THREAD_PRIORITY	(CONFIG_NUM_PREEMPT_PRIORITIES - 2)
+#define SIGNAL_LED_THREAD_STACKSIZE	400
+#define SIGNAL_LED_PIN			DT_ALIAS_LED0_GPIOS_PIN
+
+/* define thread with K_FOREVER, we will start it manually */
+K_THREAD_DEFINE(led_worker_th, SIGNAL_LED_THREAD_STACKSIZE, signal_led_worker,
+		NULL, NULL, NULL,
+		SIGNAL_LED_THREAD_PRIORITY, 0, K_FOREVER);
+
+static void signal_led_init(void)
+{
+//	k_sem_init(&signal_led.led_sem, 0, 1);
+
+	signal_led.gpio_dev = device_get_binding(DT_ALIAS_LED0_GPIOS_CONTROLLER);
+	__ASSERT(signal_led.gpio_dev, "Signal LED GPIO device is NULL");
+
+	gpio_pin_configure(signal_led.gpio_dev, SIGNAL_LED_PIN, GPIO_DIR_OUT);
+
+	/* LED off by default */
+	gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+
+	signal_led.led_blink_count = 0;
+	signal_led.led_on_time = 1000;
+	signal_led.led_off_time = 1000;
+
+	/* FIXME: according to code we can suspend thread before start,
+	 * however it isn't documented */
+	k_thread_suspend(led_worker_th);
+	k_thread_start(led_worker_th);
+}
+
+static void led_gpio_enable(bool on)
+{
+	// TODO: do we need to check if thred is running
+	/* suspend in case of led is already blinking */
+	k_thread_suspend(led_worker_th);
+
+	if (on)
+		gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
+	else
+		gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+}
+
+static void led_gpio_blink(uint16_t on, uint16_t off, uint16_t count)
+{
+	// TODO: do we need to check if thred is running
+	/* suspend in case of led is already blinking */
+	k_thread_suspend(led_worker_th);
+
+	signal_led.led_blink_count = count;
+	signal_led.led_on_time = on;
+	signal_led.led_off_time = off;
+
+	k_thread_resume(led_worker_th);
+}
+
+static void signal_led_worker(void)
+{
+	while (true) {
+		printk("RFF: got into led blink worker\n");
+
+		while (signal_led.led_blink_count--) {
+			gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
+			k_sleep(signal_led.led_on_time);
+			gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+			k_sleep(signal_led.led_off_time);
+		}
+
+		k_thread_suspend(led_worker_th);
+	}
+}
+
+static struct device *button_gpio_dev;
+
+static void button_init(void)
+{
+	button_gpio_dev = device_get_binding(DT_ALIAS_SW0_GPIOS_CONTROLLER);
+	__ASSERT(button_gpio_dev, "BUTTON device is NULL");
+
+	gpio_pin_configure(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN,
+			   GPIO_DIR_IN | GPIO_PUD_PULL_UP);
+}
+
+static inline bool button_pressed(void)
+{
+	u32_t val = 0U;
+
+	gpio_pin_read(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN, &val);
+	return !!val;
+}
+
+static void bt_uart_isr(struct device *uart_dev);
+
+#define MAX_RX_SIZE	64
+#define MAX_NOTIF_SIZE	2
+
+struct ser_ctx {
+	struct device	*uart_dev;
+
+	stack_data_t	stack_arr[MAX_NOTIF_SIZE];
+	struct k_stack	notify_stack;
+
+	u8_t		rx_buff[MAX_RX_SIZE + 2];
+	/* can be reseted only with IRQ disabled */
+	u8_t		data_recieved;
+
+	/* can be changed only with IRQ disabled */
+	u8_t		data_notify_second;
+} ser;
+
+static void bt_uart_init(void)
+{
+	ser.uart_dev = device_get_binding(DT_UART_STM32_USART_2_NAME);
+	__ASSERT(ser.uart_dev, "UART device is NULL");
+
+	uart_irq_rx_disable(ser.uart_dev);
+	uart_irq_tx_disable(ser.uart_dev);
+
+	k_stack_init(&ser.notify_stack, ser.stack_arr, MAX_NOTIF_SIZE);
+
+	uart_irq_callback_set(ser.uart_dev, bt_uart_isr);
+}
+
+static void bt_uart_reconfig(u8_t data_receive_expected)
+{
+	u8_t c;
+
+	uart_irq_rx_disable(ser.uart_dev);
+
+	__ASSERT(ser.uart_dev, "UART device is NULL");
+	__ASSERT(data_receive_expected <= MAX_RX_SIZE, "data_receive_expected too much");
+
+	if (data_receive_expected > MAX_RX_SIZE)
+		data_receive_expected = MAX_RX_SIZE;
+
+	uart_irq_update(ser.uart_dev);
+	while (uart_fifo_read(ser.uart_dev, &c, 1) > 0)
+		continue;
+
+	ser.data_recieved = 0;
+	ser.data_notify_second = data_receive_expected;
+	memset(ser.rx_buff, 0, MAX_RX_SIZE + 2);
+
+	uart_irq_rx_enable(ser.uart_dev);
+}
+
+static void bt_uart_stop(void)
+{
+	uart_irq_rx_disable(ser.uart_dev);
+}
+
+static void bt_uart_isr(struct device *uart_dev)
+{
+//	struct ser_ctx *ser = user_data;
+
+	if (uart_irq_update(ser.uart_dev) && uart_irq_rx_ready(ser.uart_dev)) {
+		u8_t c;
+		uart_fifo_read(ser.uart_dev, &c, 1);
+
+		if (ser.data_recieved > MAX_RX_SIZE)
+			return;
+
+		ser.rx_buff[ser.data_recieved++] = c;
+
+		if (ser.data_recieved == 1)
+			k_stack_push(&ser.notify_stack, (stack_data_t)1);
+		if (ser.data_recieved == ser.data_notify_second)
+			k_stack_push(&ser.notify_stack, (stack_data_t)ser.data_notify_second);
+	}
+}
+
+static void uart_receiver_send(const u8_t *buf, size_t size)
+{
+
+	__ASSERT(ser.uart_dev, "UART device is NULL");
+
+	if (size == 0)
+		return;
+
+	do {
+		uart_poll_out(ser.uart_dev, *buf++);
+	} while (--size);
+}
+
+static void uart_receiver_send_string(const u8_t *buf)
+{
+	uart_receiver_send(buf, strlen(buf));
+}
+
+#define HM_PFX		"RFF: HM11: "
+
+struct hm11_at_cmd {
+	char	*at_command;
+	char	*expected_answer;
+	int	(*unexpected_handler)(char *expected, char *got);
+};
+
+static int hm11_must_equal_h(char *expected, char *got)
+{
+	printk(HM_PFX "bad param, exp '%s', got '%s'\n", expected, got);
+	return -EINVAL;
+}
+
+#define HM_SUPP_VERSION		524
+#define HM_VERS_PREFIX		"HMSoft V"
+#define HM_VERS_RESP		HM_VERS_PREFIX xstr(HM_SUPP_VERSION)
+
+/* Allow any version >= 524 */
+static int hm11_version_h(char *expected, char *got)
+{
+	size_t prefix_sz = strlen(HM_VERS_PREFIX);
+	long hm_version;
+
+	if (strncmp(got, HM_VERS_PREFIX, prefix_sz) != 0) {
+		printk(HM_PFX "unexpected version respond: '%s'\n", got);
+
+		return -EINVAL;
+	}
+
+	got += prefix_sz;
+	hm_version = strtol(got, NULL, 10);
+	printk(HM_PFX "firmware version: %ld\n", hm_version);
+
+	if (hm_version >= HM_SUPP_VERSION)
+		return 0;
+
+	printk(HM_PFX "firmware version too old: %ld\n", hm_version);
+	return -EINVAL;
+}
+
+struct hm11_at_cmd	hm11_assert[] = {
+	{ "AT",		"OK",			hm11_must_equal_h },
+	{ "AT+VERR?",	HM_VERS_RESP,		hm11_version_h },
+	{ "AT+ADVI?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+ADTY?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+ALLO?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+IMME?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+MODE?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+NOTI?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+NAME?",	"OK+NAME:HMSoft\0",	hm11_must_equal_h },
+	{ "AT+PIO1?",	"OK+Get:0",		hm11_must_equal_h }, //TODO switch to 1
+	{ "AT+PASS?",	"OK+Get:999999",	hm11_must_equal_h },
+	{ "AT+POWE?",	"OK+Get:2",		hm11_must_equal_h },
+	{ "AT+PWRM?",	"OK+Get:1",		hm11_must_equal_h },
+	{ "AT+ROLE?",	"OK+Get:0",		hm11_must_equal_h },
+	{ "AT+TYPE?",	"OK+Get:3",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_pio1_reconf[] = {
+	{ "AT+PIO11",	"OK+Set:1",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_type_reconf[] = {
+	{ "AT+TYPE3",	"OK+Set:3",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+#define WAIT_TIME	100
+#define MAX_RETRY_AT	15
+
+static int hm11_do_at_cmd(struct hm11_at_cmd *cmd_list)
+{
+	stack_data_t tmp;
+	int retry = MAX_RETRY_AT;
+	int ret = 0;
+
+	while (cmd_list->at_command) {
+		char *exp_answer = cmd_list->expected_answer;
+		size_t expected_answer_sz = strlen(exp_answer);
+
+		bt_uart_reconfig(expected_answer_sz);
+		uart_receiver_send_string(cmd_list->at_command);
+		k_stack_pop(&ser.notify_stack, &tmp, K_MSEC(WAIT_TIME));
+		k_stack_pop(&ser.notify_stack, &tmp, K_MSEC(WAIT_TIME));
+		k_sleep(10);
+		bt_uart_stop();
+
+		/*
+		 * HACK: sometimes HM-11 doesn't respond to AT command at all,
+		 * confirmed with logic analyzer.
+		 */
+		if (!ser.data_recieved && retry) {
+			printk(HM_PFX "answer lost for '%s', attempt %d\n",
+				cmd_list->at_command, MAX_RETRY_AT - retry);
+			retry--;
+
+			continue;
+		}
+		retry = MAX_RETRY_AT;
+
+//		printk(HM_PFX "received: %s (%u)\n", (char *)ser.rx_buff, ser.data_recieved);
+
+		if (strncmp(exp_answer, ser.rx_buff, MAX_RX_SIZE) != 0)
+			ret = cmd_list->unexpected_handler(exp_answer, ser.rx_buff);
+
+		if (ret)
+			break;
+
+		cmd_list++;
+	}
+
+	printk(HM_PFX "AT cmd list: %s\n", ret ? "FAIL" : "OK");
+
+	return ret;
+}
+
+/* host CMD format: ALARM:hh:mm where hh:mm is wait time before alarm */
+#define HOSTCMD_PFX	"ALARM:"
+
+static inline bool hm11_status_connected(void)
+{
+	//TODO: FIXME: check status led here
+	return true;
+}
+
+static void hm11_send_cmd_respond(const char *str)
+{
+	if (hm11_status_connected())
+		uart_receiver_send_string(str);
+}
+
+static int hm11_parse_validate_host_cmd(struct host_cmd *cmd)
+{
+	size_t pfx_sz = strlen(HOSTCMD_PFX);
+	size_t cmd_sz = pfx_sz + 5;
+	char *rx_buff_ptr = ser.rx_buff, *end;
+	long alarm_hh, alarm_mm;
+#define RESPOND_BUFF_SZ	24
+	char str[RESPOND_BUFF_SZ];
+
+	if (strncmp(HOSTCMD_PFX, ser.rx_buff, pfx_sz) != 0)
+		goto bad_cmd;
+
+	if (strlen(ser.rx_buff) < pfx_sz + 3)
+		goto bad_cmd;
+
+	rx_buff_ptr += pfx_sz;
+	alarm_hh = strtol(rx_buff_ptr, &end, 10);
+	rx_buff_ptr = end + 1;
+	alarm_mm = strtol(rx_buff_ptr, &end, 10);
+
+	if (alarm_mm >= 60) {
+		printk(HM_PFX "more than 60 minutes? Huh.\n");
+
+		goto bad_cmd;
+	}
+
+	/* Just in case of TYPO in command */
+	if (alarm_hh > 24) {
+		printk(HM_PFX "more than 24 hours? Huh.\n");
+
+		goto bad_cmd;
+	}
+
+	printk(HM_PFX "got hostcmd: wait for alarm for %ld:%ld\n", alarm_hh, alarm_mm);
+	snprintf(str, RESPOND_BUFF_SZ, "WAIT %ld:%ld", alarm_hh, alarm_mm);
+	hm11_send_cmd_respond(str);
+
+	cmd->delay_sec = (alarm_hh * 60 + alarm_mm) * 60;
+	return 0;
+
+bad_cmd:
+	printk(HM_PFX "junk instead of hostcmd: '%s'\n", ser.rx_buff);
+	hm11_send_cmd_respond("UNKNOWN");
+	return -EINVAL;
+}
+
+static int hm11_wait_for_host_cmd(struct host_cmd *cmd)
+{
+	stack_data_t tmp;
+	size_t pfx_sz = strlen(HOSTCMD_PFX);
+	size_t cmd_sz = pfx_sz + 5;
+
+	bt_uart_reconfig(cmd_sz);
+	k_stack_pop(&ser.notify_stack, &tmp, K_FOREVER);
+	k_stack_pop(&ser.notify_stack, &tmp, K_MSEC(WAIT_TIME));
+	k_sleep(10);
+	bt_uart_stop();
+
+	return hm11_parse_validate_host_cmd(cmd);
+
+//	if (strncmp(HOSTCMD_PFX, ser.rx_buff, pfx_sz) != 0) {
+//		printk(HM_PFX "got junk instead of hostcmd: %s\n", ser.rx_buff);
+//		uart_receiver_send_string("UNKNOWN");
+//
+//		return -EINVAL;
+//	}
+//
+//	if (strlen(ser.rx_buff) < pfx_sz + 3) {
+//		printk(HM_PFX "got junk instead of hostcmd: %s\n", ser.rx_buff);
+//		uart_receiver_send_string("UNKNOWN");
+//
+//		return -EINVAL;
+//	}
+//
+//	rx_buff_ptr += pfx_sz;
+//	alarm_hh = strtol(rx_buff_ptr, &end, 10);
+//	rx_buff_ptr = end + 1;
+//	alarm_mm = strtol(rx_buff_ptr, &end, 10);
+//
+//	if (alarm_mm >= 60) {
+//		printk(HM_PFX "more than 60 minutes? Huh.\n");
+//		uart_receiver_send_string("UNKNOWN");
+//
+//		return -EINVAL;
+//	}
+//
+//	snprintf(str, RESPOND_BUFF_SZ, "WAIT %ld:%ld", alarm_hh, alarm_mm);
+//	uart_receiver_send_string(str);
+//
+//	printk(HM_PFX "got hostcmd: wait for alarm for %ld:%ld\n", alarm_hh, alarm_mm);
+//	return 0;
+}
+
+void main(void)
+{
+//	stack_data_t tmp;
+
+	printk("RFF: Hello World! %s\n", CONFIG_BOARD);
+
+	rtc_init();
+	button_init();
+	bt_uart_init();
+	signal_led_init();
+	timer3_pwm_init();
+
+	led_gpio_blink(20, 20, 1000);
+
+//	uart_receiver_send("1234567890", 10);
+//	bt_uart_reconfig(5);
+//
+//	k_stack_pop(&ser.notify_stack, &tmp, K_FOREVER);
+//	printk("RFF: received: %x\n", (u32_t)tmp);
+//	k_stack_pop(&ser.notify_stack, &tmp, K_SECONDS(10));
+//	printk("RFF: received: %x\n", (u32_t)tmp);
+//
+//	bt_uart_stop();
+//	ser.rx_buff[ser.data_recieved + 1] = 0;
+//	printk("RFF: received: %s\n", (char *)ser.rx_buff);
+
+	hm11_do_at_cmd(hm11_assert);
+
+	led_gpio_enable(false);
+	led_gpio_blink(500, 500, 10);
+
+	while (1) {
+		hm11_wait_for_host_cmd(&host_cmd_curr);
+		printk("RFF: button: %x\n", button_pressed());
+		k_sleep(10000);
+	}
+}
