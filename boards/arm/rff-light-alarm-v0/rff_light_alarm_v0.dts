@@ -1,0 +1,106 @@
+/*
+ * Copyright (c) 2019, embedjournal.com
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <st/f1/stm32f103X8.dtsi>
+
+/ {
+	model = "STM32 Minimum Development Board (Blue)";
+	compatible = "st,stm32_min_dev_blue", "st,stm32f103c8";
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led: led {
+			gpios = <&gpioc 13 GPIO_INT_ACTIVE_HIGH>;
+			label = "LD";
+		};
+	};
+
+//	pwmleds {
+//		compatible = "pwm-leds";
+//		pwm_led0: pwm_led_0 {
+//			pwms = <&timers3_pwm 2 1000>;
+//		};
+//		pwm_led1: pwm_led_1 {
+//			pwms = <&timers3_pwm 3 1000>;
+//		};
+//	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpioa 15 GPIO_INT_ACTIVE_HIGH>;
+			label = "Push button switch 0";
+		};
+	};
+
+	aliases {
+		led0 = &led;
+		sw0 = &button0;
+//		pwm-led0 = &pwm_led0;
+//		pwm-led1 = &pwm_led1;
+	};
+};
+
+&usart1 {
+	current-speed = <9600>;
+	status = "okay";
+};
+
+&usart2 {
+	current-speed = <9600>;
+	status = "okay";
+};
+
+&usart3 {
+	current-speed = <115200>;
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "disabled";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c2 {
+	status = "disabled";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&spi1 {
+	status = "disabled";
+};
+
+&spi2 {
+	status = "disabled";
+};
+
+&timers1 {
+	status = "disabled";
+
+	pwm {
+		status = "disabled";
+	};
+};
+
+//&timers3 {
+//	status = "okay";
+//
+//	timers3_pwm: pwm {
+//		status = "okay";
+//	};
+//};
+
+&usb {
+	status = "okay";
+};

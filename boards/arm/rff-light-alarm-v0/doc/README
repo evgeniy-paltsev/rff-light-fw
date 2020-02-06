@@ -1,0 +1,19 @@
+Pins matching:
+
+Bluetooth:
+A2  - UART-2 TX
+A3  - UART-2 RX
+A7  - GPIO - OUT - key
+B11 - GPIO - OUT - reset
+B10 - GPIO - IN - led
+
+PWM
+B0  - PWM - TIM3_CH3
+B1  - PWM - TIM3_CH4
+
+Button
+A15 - GPIO - IN
+
+Console
+A9  - UART-1 TX
+A10 - UART-1 RX

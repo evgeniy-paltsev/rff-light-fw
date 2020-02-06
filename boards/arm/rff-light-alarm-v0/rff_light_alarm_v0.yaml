@@ -1,0 +1,13 @@
+identifier: rff_light_alarm_v0
+name: RFF board (v0) for light alarm
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+ram: 20
+supported:
+  - i2c
+  - pwm
+  - spi
