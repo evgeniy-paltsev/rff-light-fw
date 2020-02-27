@@ -601,10 +601,18 @@ static void sheck_for_alarm(void)
 		check_for_alarm_powerfault();
 }
 
+static void xlate_leds(uint32_t val)
+{
+	uint32_t led0, led1;
+
+	brightness_model->xlate_leds(val, &led0, &led1);
+	TIM3->CCR4 = led0;
+	TIM3->CCR3 = led1;
+}
+
 static void _alarm_sched_worker(u32_t *suspend_time)
 {
 	uint32_t curr_time = 0, start_time = 0, new_time;
-	uint32_t led0, led1;
 
 	printk("RFF: got into led alarm worker\n");
 	led_gpio_blink(20, 20, 250);
@@ -632,9 +640,7 @@ static void _alarm_sched_worker(u32_t *suspend_time)
 
 		if (new_time != curr_time) {
 			curr_time = new_time;
-			brightness_model->xlate_leds(curr_time - start_time, &led0, &led1);
-			TIM3->CCR4 = led0;
-			TIM3->CCR3 = led1;
+			xlate_leds(curr_time - start_time);
 		}
 
 		/* save timestamp to calculate brightens for decrease from it later */
@@ -660,9 +666,7 @@ static void _alarm_sched_worker(u32_t *suspend_time)
 	/* TODO: we don't handle power fault for HOLD time */
 	if (start_time + HOLD_TIME_S > curr_time) {
 		printk("RFF: adjust brightens for holding = %u\n", rtc_get_time());
-		brightness_model->xlate_leds(RISE_TIME_S + 1, &led0, &led1);
-		TIM3->CCR4 = led0;
-		TIM3->CCR3 = led1;
+		xlate_leds(RISE_TIME_S + 1);
 	}
 
 	while (start_time + HOLD_TIME_S > curr_time) {
@@ -689,7 +693,6 @@ static void _alarm_sched_worker(u32_t *suspend_time)
 /* slowly decrease brightens to safe value */
 static void suspend_alarm(u32_t suspend_time)
 {
-	uint32_t led0, led1;
 //	uint32_t curr_time;
 //	uint32_t curr_brightness_timestamp;
 
@@ -726,9 +729,7 @@ static void suspend_alarm(u32_t suspend_time)
 	 * In normal case this brightens adjustment is useless.
 	 * It's only useful in case of calling this function after power fault.
 	 */
-	brightness_model->xlate_leds(backup_data_get(), &led0, &led1);
-	TIM3->CCR4 = led0;
-	TIM3->CCR3 = led1;
+	xlate_leds(backup_data_get());
 
 //	if (TIM3->CCR4 < END_ALARM_BRIGHTNES)
 //		TIM3->CCR4 = END_ALARM_BRIGHTNES;
