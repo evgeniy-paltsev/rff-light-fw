@@ -21,7 +21,7 @@
 	leds {
 		compatible = "gpio-leds";
 		led: led {
-			gpios = <&gpioc 13 GPIO_INT_ACTIVE_HIGH>;
+			gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
 			label = "LD";
 		};
 	};
@@ -39,7 +39,7 @@
 	buttons {
 		compatible = "gpio-keys";
 		button0: button_0 {
-			gpios = <&gpioa 15 GPIO_INT_ACTIVE_HIGH>;
+			gpios = <&gpioa 15 GPIO_ACTIVE_HIGH>;
 			label = "Push button switch 0";
 		};
 	};
