@@ -73,10 +73,10 @@ static void signal_led_init(void)
 	signal_led.gpio_dev = device_get_binding(DT_ALIAS_LED0_GPIOS_CONTROLLER);
 	__ASSERT(signal_led.gpio_dev, "Signal LED GPIO device is NULL");
 
-	gpio_pin_configure(signal_led.gpio_dev, SIGNAL_LED_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(signal_led.gpio_dev, SIGNAL_LED_PIN, GPIO_OUTPUT);
 
 	/* LED off by default */
-	gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+	gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
 
 	signal_led.led_blink_count = 0;
 	signal_led.led_on_time = 1000;
@@ -97,9 +97,9 @@ static void led_gpio_enable(bool on)
 	printk("RFF: led gpio thread: %s\n", k_thread_state_str(led_worker_th));
 
 	if (on)
-		gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
+		gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
 	else
-		gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+		gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
 }
 
 static __unused void led_gpio_blink(uint16_t on, uint16_t off, uint16_t count)
@@ -121,9 +121,9 @@ static void signal_led_worker(void)
 		printk("RFF: got into led blink worker\n");
 
 		while (signal_led.led_blink_count--) {
-			gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
+			gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
 			k_sleep(signal_led.led_on_time);
-			gpio_pin_write(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
+			gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
 			k_sleep(signal_led.led_off_time);
 		}
 
@@ -139,14 +139,14 @@ static void button_init(void)
 	__ASSERT(button_gpio_dev, "BUTTON device is NULL");
 
 	gpio_pin_configure(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN,
-			   GPIO_DIR_IN | GPIO_PUD_PULL_UP);
+			   GPIO_INPUT | GPIO_PULL_UP);
 }
 
 static inline bool button_pressed(void)
 {
-	u32_t val = 0U;
+	int val;
 
-	gpio_pin_read(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN, &val);
+	val = gpio_pin_get(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN);
 	return !val;
 }
 
