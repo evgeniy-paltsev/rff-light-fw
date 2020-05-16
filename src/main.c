@@ -450,6 +450,12 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 	rx_buff_ptr = end + 1;
 	alarm_mm = strtol(rx_buff_ptr, &end, 10);
 
+	if (alarm_hh < 0 || alarm_mm < 0) {
+		printk(HM_PFX "negative time? Huh.\n");
+
+		goto bad_cmd;
+	}
+
 	if (alarm_mm >= 60) {
 		printk(HM_PFX "more than 60 minutes? Huh.\n");
 
@@ -470,7 +476,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 	}
 
 	printk(HM_PFX "got hostcmd: wait for alarm for %ld:%ld\n", alarm_hh, alarm_mm);
-	snprintf(str, RESPOND_BUFF_SZ, "WAIT %ld:%ld", alarm_hh, alarm_mm);
+	snprintf(str, RESPOND_BUFF_SZ, "WAIT %2ld:%2ld", alarm_hh, alarm_mm);
 	/* TODO: send respond after alarm schedule */
 	hm11_send_cmd_respond(str);
 
