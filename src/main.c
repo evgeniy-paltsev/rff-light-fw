@@ -44,7 +44,7 @@ static struct host_cmd {
 	uint32_t		delay_sec;
 } host_cmd_curr;
 
-static struct brightness_model *brightness_model;
+static struct brightness_model brightness_model;
 
 static void signal_led_worker(void);
 
@@ -559,6 +559,8 @@ static void schedule_alarm_new(uint32_t wait_time)
 
 	runtime_assert(wait_time >= RISE_TIME_S);
 
+	model_logarithmic_init(&brightness_model, RISE_TIME_S);
+
 	alarm_info.powerfault_happened = false;
 	alarm_info.disarm_alarm = false;
 
@@ -581,6 +583,9 @@ static void check_for_alarm_powerfault(void)
 	runtime_assert(!alarm_info.alarm_worker_tid);
 
 	printk("RFF: repair alarm after power fault\n");
+
+	model_logarithmic_init(&brightness_model, RISE_TIME_S);
+
 	alarm_info.powerfault_happened = true;
 	alarm_info.disarm_alarm = false;
 
@@ -605,7 +610,7 @@ static void xlate_leds(uint32_t val)
 {
 	uint32_t led0, led1;
 
-	brightness_model->xlate_leds(val, &led0, &led1);
+	brightness_model.xlate_leds(&brightness_model, val, &led0, &led1);
 	TIM3->CCR4 = led0;
 	TIM3->CCR3 = led1;
 }
@@ -739,8 +744,8 @@ static void suspend_alarm(u32_t suspend_time)
 
 	led_gpio_blink(500, 800, 100);
 	for (uint32_t i = 0; i < MAX_PWM / 300; i++) {
-		led0 = TIM3->CCR4;
-		led1 = TIM3->CCR3;
+		u32_t led0 = TIM3->CCR4;
+		u32_t led1 = TIM3->CCR3;
 
 		if (led0 > END_ALARM_BRIGHTNES)
 			led0 -= 300;
@@ -801,8 +806,7 @@ void main(void)
 	signal_led_init();
 	timer3_pwm_init();
 
-	brightness_model = get_model_logarithmic();
-	brightness_model->init(RISE_TIME_S);
+	model_logarithmic_init(&brightness_model, RISE_TIME_S);
 
 	sheck_for_alarm();
 

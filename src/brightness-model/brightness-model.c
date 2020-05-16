@@ -5,27 +5,16 @@
 #define MAX_TIM_PWM		0xFFFF
 #define MAX_OUT_VAL		(MAX_TIM_PWM * 2)
 
-static float g_model_logarithmic_const = 1;
-static uint32_t g_max_in_value = 1;
 
-//static float log_base(float x, float base) {
-//	return log(x) / log(base);
-//}
-
-static void model_logarithmic_init(uint32_t max_in_value)
-{
-	g_model_logarithmic_const = (max_in_value * log10(2)) / (log10(MAX_OUT_VAL));
-	g_max_in_value = max_in_value;
-}
-
-static uint32_t model_logarithmic_xlate(uint32_t in_value)
+static uint32_t model_logarithmic_xlate(struct brightness_model *model,
+					uint32_t in_value)
 {
 	uint32_t value;
 
-	if (in_value > g_max_in_value)
-		in_value = g_max_in_value;
+	if (in_value > model->g_max_in_value)
+		in_value = model->g_max_in_value;
 
-	value = round(pow(2, (in_value / g_model_logarithmic_const)));
+	value = round(pow(2, (in_value / model->g_model_logarithmic_const)));
 
 	if (value > MAX_OUT_VAL)
 		value = MAX_OUT_VAL;
@@ -33,14 +22,16 @@ static uint32_t model_logarithmic_xlate(uint32_t in_value)
 	return value;
 }
 
-static void model_logarithmic_xlate_leds(uint32_t in_value, uint32_t *led0, uint32_t *led1)
+static void model_logarithmic_xlate_leds(struct brightness_model *model,
+					 uint32_t in_value, uint32_t *led0,
+					 uint32_t *led1)
 {
 	uint32_t value;
 
-	if (in_value > g_max_in_value)
-		in_value = g_max_in_value;
+	if (in_value > model->g_max_in_value)
+		in_value = model->g_max_in_value;
 
-	value = round(pow(2, (in_value / g_model_logarithmic_const)));
+	value = round(pow(2, (in_value / model->g_model_logarithmic_const)));
 
 	if (value > MAX_OUT_VAL)
 			value = MAX_OUT_VAL;
@@ -58,15 +49,12 @@ static void model_logarithmic_xlate_leds(uint32_t in_value, uint32_t *led0, uint
 	}
 }
 
-struct brightness_model brightness_model_logarithmic = {
-	.init = model_logarithmic_init,
-	.xlate = model_logarithmic_xlate,
-	.xlate_leds = model_logarithmic_xlate_leds,
-};
-
-struct brightness_model *get_model_logarithmic(void)
+void model_logarithmic_init(struct brightness_model *model, uint32_t max_in_value)
 {
-	return &brightness_model_logarithmic;
+	model->g_model_logarithmic_const = (max_in_value * log10(2)) / (log10(MAX_OUT_VAL));
+	model->g_max_in_value = max_in_value;
+	model->xlate = model_logarithmic_xlate;
+	model->xlate_leds = model_logarithmic_xlate_leds;
 }
 
 /*
