@@ -329,8 +329,8 @@ void main(void)
 	printk("RFF: Hello World! %s\n", CONFIG_BOARD);
 
 	rtc_init();
-	button_io_init();
-	printk("RFF: button_pressed %d\n", button_get_state() == BUTTON_STATE_PRESSED);
+	button_io_init(true);
+	button_print_debug();
 	bt_uart_init();
 	signal_led_init();
 	timer3_pwm_init();
