@@ -11,6 +11,7 @@
 #include "pwm/tim3-pwm.h"
 #include "rtc/rtc-ctl.h"
 #include "brightness-model/brightness-model.h"
+#include "button-ctl.h"
 
 #define str(a) #a
 #define xstr(a) str(a)
@@ -129,25 +130,6 @@ static void signal_led_worker(void)
 
 		k_thread_suspend(led_worker_th);
 	}
-}
-
-static struct device *button_gpio_dev;
-
-static void button_init(void)
-{
-	button_gpio_dev = device_get_binding(DT_ALIAS_SW0_GPIOS_CONTROLLER);
-	__ASSERT(button_gpio_dev, "BUTTON device is NULL");
-
-	gpio_pin_configure(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN,
-			   GPIO_INPUT | GPIO_PULL_UP);
-}
-
-static inline bool button_pressed(void)
-{
-	int val;
-
-	val = gpio_pin_get(button_gpio_dev, DT_ALIAS_SW0_GPIOS_PIN);
-	return !val;
 }
 
 static void bt_uart_isr(struct device *uart_dev);
@@ -606,7 +588,7 @@ static void check_for_alarm_powerfault(void)
 /* After reset button is pressed - user wants new alarm with default values */
 static void sheck_for_alarm(void)
 {
-	if (button_pressed())
+	if (button_get_state() == BUTTON_STATE_PRESSED)
 		schedule_alarm_new(SLEEP_TIME);
 	else
 		check_for_alarm_powerfault();
@@ -657,7 +639,7 @@ static void _alarm_sched_worker(u32_t *suspend_time)
 		/* save timestamp to calculate brightens for decrease from it later */
 		backup_data_set(curr_time - start_time);
 
-		if (button_pressed()) {
+		if (button_get_state() == BUTTON_STATE_PRESSED) {
 			*suspend_time = new_time;
 			printk("RFF: alarm suspended at = %u\n", rtc_get_time());
 			alarm_atomic_state_set(ALARM_STATE_DONE);
@@ -683,7 +665,7 @@ static void _alarm_sched_worker(u32_t *suspend_time)
 	while (start_time + HOLD_TIME_S > curr_time) {
 		curr_time = rtc_get_time();
 
-		if (button_pressed()) {
+		if (button_get_state() == BUTTON_STATE_PRESSED) {
 			printk("RFF: alarm suspended = %u\n", rtc_get_time());
 			alarm_atomic_state_set(ALARM_STATE_DONE);
 
@@ -770,7 +752,7 @@ static void suspend_alarm(u32_t suspend_time)
 	printk("RFF: brightens at safe value, wait for user = %u\n", rtc_get_time());
 
 	/* TODO: add timeout here, like 1-2 hours */
-	while (!button_pressed())
+	while (!(button_get_state() == BUTTON_STATE_PRESSED))
 		k_sleep(100);
 
 	printk("RFF: alarm fully disabled, bye = %u\n", rtc_get_time());
@@ -807,7 +789,8 @@ void main(void)
 	printk("RFF: Hello World! %s\n", CONFIG_BOARD);
 
 	rtc_init();
-	button_init();
+	button_io_init();
+	printk("RFF: button_pressed %d\n", button_get_state() == BUTTON_STATE_PRESSED);
 	bt_uart_init();
 	signal_led_init();
 	timer3_pwm_init();
@@ -822,8 +805,6 @@ void main(void)
 			SLEEP_TIME / (60 * 60), (SLEEP_TIME % (60 * 60)) / 60,
 			(SLEEP_TIME % (60 * 60)) % 60,
 			RISE_TIME_S / 60, HOLD_TIME_S / 60);
-
-	printk("RFF: button_pressed %d\n", button_pressed());
 
 	while (1) {
 		ret = hm11_wait_for_host_cmd(&host_cmd_curr);
