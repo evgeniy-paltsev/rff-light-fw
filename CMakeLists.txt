@@ -17,6 +17,7 @@ target_link_libraries(app PUBLIC -lgcc)
 # the boilerplate code, which defines the target.
 target_sources(app PRIVATE src/main.c)
 target_sources(app PRIVATE src/button-ctl.c)
+target_sources(app PRIVATE src/status-led-ctl.c)
 target_sources(app PRIVATE src/pwm/tim3-pwm.c)
 target_sources(app PRIVATE src/rtc/rtc-ctl.c)
 target_sources(app PRIVATE src/brightness-model/brightness-model.c)
