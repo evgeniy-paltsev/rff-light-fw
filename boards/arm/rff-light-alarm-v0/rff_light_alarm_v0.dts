@@ -53,7 +53,7 @@
 };
 
 &usart1 {
-	current-speed = <9600>;
+	current-speed = <115200>;
 	status = "okay";
 };
 
