@@ -97,7 +97,7 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 		TIM3->CCR4 = led0;
 		TIM3->CCR3 = led1;
 
-		k_sleep(333);
+		k_sleep(100);
 
 	} while (!io.finished);
 
@@ -228,7 +228,7 @@ void main(void)
 
 	check_for_alarm();
 
-	hm11_do_at_cmd(hm11_assert);
+	hm11_init();
 
 	while (1) {
 		ret = hm11_wait_for_host_cmd(&host_cmd_curr);

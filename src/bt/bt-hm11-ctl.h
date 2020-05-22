@@ -15,7 +15,8 @@ enum host_cmd_type {
 struct hm11_at_cmd {
 	char	*at_command;
 	char	*expected_answer;
-	int	(*unexpected_handler)(char *cmd, char *expected, char *got);
+	int	(*unexpected_handler)(char *cmd, char *expected, char *got, struct hm11_at_cmd *cmdlist);
+	struct hm11_at_cmd *cmdlist;
 };
 
 struct host_cmd {
@@ -30,5 +31,6 @@ int hm11_wait_for_host_cmd(struct host_cmd *cmd);
 void bt_uart_init(void);
 int hm11_do_at_cmd(struct hm11_at_cmd *cmd_list);
 void hm11_send_cmd_respond(const char *str);
+int hm11_init(void);
 
 #endif

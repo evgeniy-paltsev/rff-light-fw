@@ -113,7 +113,7 @@ static void hm11_do_reset(void)
 	printk(HM_PFX "reset module: NOT Implemented!\n");
 }
 
-static int hm11_must_equal_h(char *cmd, char *expected, char *got)
+static int hm11_must_equal_h(char *cmd, char *expected, char *got, struct hm11_at_cmd *cmdlist)
 {
 	printk(HM_PFX "bad param on '%s': exp '%s', got '%s'\n", cmd, expected, got);
 	return -EINVAL;
@@ -124,7 +124,7 @@ static int hm11_must_equal_h(char *cmd, char *expected, char *got)
 #define HM_VERS_RESP		HM_VERS_PREFIX xstr(HM_SUPP_VERSION)
 
 /* Allow any version >= 524 */
-static int hm11_version_h(char *cmd, char *expected, char *got)
+static int hm11_version_h(char *cmd, char *expected, char *got, struct hm11_at_cmd *cmdlist)
 {
 	size_t prefix_sz = strlen(HM_VERS_PREFIX);
 	long hm_version;
@@ -146,22 +146,46 @@ static int hm11_version_h(char *cmd, char *expected, char *got)
 	return -EINVAL;
 }
 
-struct hm11_at_cmd	hm11_assert[] = {
-	{ "AT",		"OK",			hm11_must_equal_h },
-	{ "AT+VERR?",	HM_VERS_RESP,		hm11_version_h },
-	{ "AT+ADVI?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+ADTY?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+ALLO?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+IMME?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+MODE?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+NOTI?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+NAME?",	"OK+NAME:HMSoft\0",	hm11_must_equal_h },
-	{ "AT+PIO1?",	"OK+Get:0",		hm11_must_equal_h }, //TODO switch to 1
-	{ "AT+PASS?",	"OK+Get:999999",	hm11_must_equal_h },
-	{ "AT+POWE?",	"OK+Get:2",		hm11_must_equal_h },
-	{ "AT+PWRM?",	"OK+Get:1",		hm11_must_equal_h },
-	{ "AT+ROLE?",	"OK+Get:0",		hm11_must_equal_h },
-	{ "AT+TYPE?",	"OK+Get:3",		hm11_must_equal_h },
+static int simple_reconfig_h(char *cmd, char *expected, char *got, struct hm11_at_cmd *cmdlist)
+{
+	int ret;
+
+	printk(HM_PFX "bad param on '%s': exp '%s', got '%s', try to reconfigure\n", cmd, expected, got);
+	if (!cmdlist)
+		return -EINVAL;
+
+	printk(HM_PFX "reconfigure command: '%s'\n", cmdlist[0].at_command);
+
+	k_sleep(10);
+
+	ret = hm11_do_at_cmd(cmdlist);
+	printk(HM_PFX "reconfigure: %s\n", ret ? "FAIL" : "OK");
+
+	return ret;
+}
+
+struct hm11_at_cmd	hm11_mode0_reconf[] = {
+	{ "AT+MODE0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_noti0_reconf[] = {
+	{ "AT+NOTI0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+#define HM11_MAME	"RFF_light"
+
+struct hm11_at_cmd	hm11_name_reconf[] = {
+	/* According to docs the answer should be "OK+SetName:" but actually it is "OK+Set:" */
+	{ "AT+NAME"HM11_MAME,	"OK+Set:"HM11_MAME,		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+#define HM11_PASS	"181933"
+
+struct hm11_at_cmd	hm11_pass_reconf[] = {
+	{ "AT+PASS"HM11_PASS,	"OK+Set:"HM11_PASS,		hm11_must_equal_h },
 	{ /* end of list */ }
 };
 
@@ -170,8 +194,63 @@ struct hm11_at_cmd	hm11_pio1_reconf[] = {
 	{ /* end of list */ }
 };
 
-struct hm11_at_cmd	hm11_type_reconf[] = {
+struct hm11_at_cmd	hm11_advi0_reconf[] = {
+	{ "AT+ADVI0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_adty0_reconf[] = {
+	{ "AT+ADTY0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_allo0_reconf[] = {
+	{ "AT+ALLO0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_imme0_reconf[] = {
+	{ "AT+IMME0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_powe2_reconf[] = {
+	{ "AT+POWE2",	"OK+Set:2",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_pwrm1_reconf[] = {
+	{ "AT+PWRM1",	"OK+Set:1",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_role0_reconf[] = {
+	{ "AT+ROLE0",	"OK+Set:0",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_type3_reconf[] = {
 	{ "AT+TYPE3",	"OK+Set:3",		hm11_must_equal_h },
+	{ /* end of list */ }
+};
+
+struct hm11_at_cmd	hm11_assert[] = {
+	{ "AT",		"OK",			hm11_must_equal_h,	NULL },
+	{ "AT+VERR?",	HM_VERS_RESP,		hm11_version_h,		NULL },
+	{ "AT+ADVI?",	"OK+Get:0",		simple_reconfig_h,	hm11_advi0_reconf },
+	{ "AT+ADTY?",	"OK+Get:0",		simple_reconfig_h,	hm11_adty0_reconf },
+	{ "AT+ALLO?",	"OK+Get:0",		simple_reconfig_h,	hm11_allo0_reconf },
+	{ "AT+IMME?",	"OK+Get:0",		simple_reconfig_h,	hm11_imme0_reconf },
+	{ "AT+MODE?",	"OK+Get:0",		simple_reconfig_h,	hm11_mode0_reconf }, /* tested on 610 */
+	{ "AT+NOTI?",	"OK+Get:0",		simple_reconfig_h,	hm11_noti0_reconf }, /* tested on 610 */
+//	{ "AT+NAME?",	"OK+NAME:HMSoft",	hm11_must_equal_h,	NULL },
+	{ "AT+NAME?",	"OK+NAME:"HM11_MAME,	simple_reconfig_h,	hm11_name_reconf },  /* tested on 610 */
+	{ "AT+PIO1?",	"OK+Get:0",		hm11_must_equal_h,	NULL }, //TODO switch to 1
+	{ "AT+PASS?",	"OK+Get:"HM11_PASS,	simple_reconfig_h,	hm11_pass_reconf },
+	{ "AT+POWE?",	"OK+Get:2",		simple_reconfig_h,	hm11_powe2_reconf },
+	{ "AT+PWRM?",	"OK+Get:1",		simple_reconfig_h,	hm11_pwrm1_reconf },
+	{ "AT+ROLE?",	"OK+Get:0",		simple_reconfig_h,	hm11_role0_reconf },
+	{ "AT+TYPE?",	"OK+Get:3",		simple_reconfig_h,	hm11_type3_reconf }, /* tested on 610 */
 	{ /* end of list */ }
 };
 
@@ -226,7 +305,7 @@ int hm11_do_at_cmd(struct hm11_at_cmd *cmd_list)
 //		printk(HM_PFX "received: %s (%u)\n", (char *)ser.rx_buff, ser.data_recieved);
 
 		if (strncmp(exp_answer, ser.rx_buff, MAX_RX_SIZE) != 0)
-			ret = cmd_list->unexpected_handler(cmd_list->at_command, exp_answer, ser.rx_buff);
+			ret = cmd_list->unexpected_handler(cmd_list->at_command, exp_answer, ser.rx_buff, cmd_list->cmdlist);
 
 		if (ret)
 			break;
@@ -353,4 +432,22 @@ int hm11_wait_for_host_cmd(struct host_cmd *cmd)
 	bt_uart_stop();
 
 	return hm11_host_cmd_parse_chedule_alarm(cmd);
+}
+
+static void hm11_reset_init(void)
+{
+
+}
+
+static void hm11_reset(void)
+{
+	/* TODO: reset here */
+}
+
+int hm11_init(void)
+{
+	hm11_reset_init();
+	hm11_reset();
+
+	return hm11_do_at_cmd(hm11_assert);
 }
