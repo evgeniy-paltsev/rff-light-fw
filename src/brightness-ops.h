@@ -11,8 +11,9 @@ enum brightnes_value_ops {
 };
 
 enum brightnes_geometry_ops {
-	B_LED_SEQUENTIAL = 0,
-	B_LED_PARALLEL
+	B_LED_AUTO = 0,
+	B_LED_PARALLEL,
+	B_LED_SEQUENTIAL
 };
 
 #endif

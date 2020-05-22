@@ -12,6 +12,12 @@
 #define MID_OUT_VAL		0xEFF
 #define OFF_OUT_VAL		MIN_TIM_PWM
 
+#ifdef BRIGHTNESS_DEBUG_LOG
+#define log_info(fmt, ...) ({ printk(fmt, ##__VA_ARGS__); })
+#else
+#define log_info(fmt, ...)
+#endif
+
 
 static void set_sequential(uint32_t value, uint32_t *led0, uint32_t *led1)
 {
@@ -85,7 +91,7 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 		return;
 	}
 
-	printk("%s:%d brightnes_period: %u, xlate_value: %u\n", __func__, __LINE__, brightnes_period, xlate_value);
+	log_info("%s:%d brightnes_period: %u, xlate_value: %u\n", __func__, __LINE__, brightnes_period, xlate_value);
 
 
 	uint32_t value_from = brightnes_ops_to_value(brightnes_from);
@@ -95,7 +101,7 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 	if (xlate_value >= brightnes_period)
 		xlate_value = brightnes_period - 1;
 
-	printk("%s:%d brightnes_period: %u, xlate_value: %u, value_from: %x, value_to: %x\n", __func__, __LINE__, brightnes_period, xlate_value, value_from, value_to);
+	log_info("%s:%d brightnes_period: %u, xlate_value: %u, value_from: %x, value_to: %x\n", __func__, __LINE__, brightnes_period, xlate_value, value_from, value_to);
 
 	if (value_from < value_to) {
 		max_output = value_to;
@@ -109,13 +115,13 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 		geometry = B_LED_PARALLEL;
 	}
 
-	printk("%s:%d curr_xlate: %u, xlate_value: %u, max_output: %x, min_output: %x\n", __func__, __LINE__, curr_xlate, xlate_value, max_output, min_output);
+	log_info("%s:%d curr_xlate: %u, xlate_value: %u, max_output: %x, min_output: %x\n", __func__, __LINE__, curr_xlate, xlate_value, max_output, min_output);
 
 	/* TODO: cache const values */
 	float log_const = ((brightnes_period - 1) * log10(2)) / (log10((max_output + 1) - min_output));
 	value = min_output + round(pow(2, (curr_xlate / log_const))) - 1;
 
-	printk("%s:%d value: %x\n", __func__, __LINE__, value);
+	log_info("%s:%d value: %x\n", __func__, __LINE__, value);
 
 	set_leds(value, geometry, led0, led1);
 }
