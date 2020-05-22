@@ -60,6 +60,13 @@ static bool disarm_status_check_and_reset(void)
 	return disarm_status;
 }
 
+static void disarm_status_set(void)
+{
+	k_mutex_lock(&disarm_mtx, K_FOREVER);
+	alarm_info.disarm_alarm = true;
+	k_mutex_unlock(&disarm_mtx);
+}
+
 static void led_mark_xlation(enum brightnes_value_ops brightnes_from,
 			     enum brightnes_value_ops brightnes_to)
 {
@@ -106,6 +113,8 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 
 static void disarm_alarm_force(void)
 {
+	printk("RFF: disarm_alarm_force\n");
+
 	k_mutex_lock(&disarm_mtx, K_FOREVER);
 	alarm_info.disarm_alarm = true;
 	k_mutex_unlock(&disarm_mtx);
@@ -154,7 +163,7 @@ static void alarm_init_new_new(uint32_t sleep_time)
 		k_thread_abort(alarm_info.alarm_worker_tid);
 	}
 
-	led_gpio_blink(20, 20, 250);
+	led_gpio_blink(20, 30, 250);
 
 	k_mutex_init(&disarm_mtx);
 	alarm_info.disarm_alarm = false;
@@ -220,7 +229,7 @@ void main(void)
 			RISE_TIME_S / 60, HOLD_TIME_S / 60);
 
 	rtc_init();
-	button_io_init(true);
+	button_io_init(true, disarm_status_set);
 	button_print_debug();
 	bt_uart_init();
 	signal_led_init();

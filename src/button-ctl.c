@@ -24,7 +24,9 @@
 
 static struct device *button_gpio_dev;
 static volatile enum button_state button_state = BUTTON_STATE_NOT_PRESSED;
+static volatile enum button_state button_prew_state = BUTTON_STATE_NOT_PRESSED;
 static u64_t reads_raw;
+static void (*long_pressed_cb_fn)(void);
 
 static void button_init(void)
 {
@@ -48,18 +50,34 @@ static inline void button_raw_fill(void)
 	reads_raw |= pressed;
 }
 
+static inline void call_for_long_cb(void)
+{
+	printk("RFF: button: got long press\n");
+
+	if (long_pressed_cb_fn)
+		long_pressed_cb_fn();
+}
+
 static inline void button_raw_process(void)
 {
-	enum button_state state;
+	enum button_state new_state;
+	enum button_state prew_prew_state;
 
 	if (__builtin_popcountll(reads_raw & GENMASK_ULL(BUTTON_READS_LONG, 0)) >= BUTTON_READS_LONG_TRASHOLD)
-		state = BUTTON_STATE_PRESSED_LONG;
+		new_state = BUTTON_STATE_PRESSED_LONG;
 	else if (__builtin_popcountll(reads_raw & GENMASK_ULL(BUTTON_READS_STD, 0)) >= BUTTON_READS_STD_TRASHOLD)
-		state = BUTTON_STATE_PRESSED;
+		new_state = BUTTON_STATE_PRESSED;
 	else
-		state = BUTTON_STATE_NOT_PRESSED;
+		new_state = BUTTON_STATE_NOT_PRESSED;
 
-	button_state = state;
+	if (button_state != new_state) {
+		prew_prew_state = button_prew_state;
+		button_prew_state = button_state;
+		button_state = new_state;
+
+		if (prew_prew_state == BUTTON_STATE_NOT_PRESSED && new_state == BUTTON_STATE_PRESSED_LONG)
+			call_for_long_cb();
+	}
 }
 
 static void button_ctl_worker(void)
@@ -97,8 +115,10 @@ K_THREAD_DEFINE(button_ctl_worker_th, BUTTON_CTL_THREAD_STACKSIZE, button_ctl_wo
 		NULL, NULL, NULL,
 		BUTTON_CTL_THREAD_PRIORITY, 0, K_FOREVER);
 
-void button_io_init(bool sync)
+void button_io_init(bool sync, void (*long_pressed_cb)(void))
 {
+	long_pressed_cb_fn = long_pressed_cb;
+
 	button_init();
 	if (sync)
 		fill_button_read_pool();

@@ -9,7 +9,7 @@ enum button_state {
 	BUTTON_STATE_PRESSED_LONG
 };
 
-void button_io_init(bool sync);
+void button_io_init(bool sync, void (*long_pressed_cb)(void));
 enum button_state button_get_state(void);
 void button_print_debug(void);
 
