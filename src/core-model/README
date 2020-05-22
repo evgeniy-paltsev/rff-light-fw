@@ -1,0 +1,2 @@
+Check with:
+gcc -Wall -DVERIF_LAUNCH -o model-cross-test.o model-cross-test.c core-model.c && ./model-cross-test.o && rm model-cross-test.o

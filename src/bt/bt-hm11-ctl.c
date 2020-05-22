@@ -113,9 +113,9 @@ static void hm11_do_reset(void)
 	printk(HM_PFX "reset module: NOT Implemented!\n");
 }
 
-static int hm11_must_equal_h(char *expected, char *got)
+static int hm11_must_equal_h(char *cmd, char *expected, char *got)
 {
-	printk(HM_PFX "bad param, exp '%s', got '%s'\n", expected, got);
+	printk(HM_PFX "bad param on '%s': exp '%s', got '%s'\n", cmd, expected, got);
 	return -EINVAL;
 }
 
@@ -124,7 +124,7 @@ static int hm11_must_equal_h(char *expected, char *got)
 #define HM_VERS_RESP		HM_VERS_PREFIX xstr(HM_SUPP_VERSION)
 
 /* Allow any version >= 524 */
-static int hm11_version_h(char *expected, char *got)
+static int hm11_version_h(char *cmd, char *expected, char *got)
 {
 	size_t prefix_sz = strlen(HM_VERS_PREFIX);
 	long hm_version;
@@ -226,7 +226,7 @@ int hm11_do_at_cmd(struct hm11_at_cmd *cmd_list)
 //		printk(HM_PFX "received: %s (%u)\n", (char *)ser.rx_buff, ser.data_recieved);
 
 		if (strncmp(exp_answer, ser.rx_buff, MAX_RX_SIZE) != 0)
-			ret = cmd_list->unexpected_handler(exp_answer, ser.rx_buff);
+			ret = cmd_list->unexpected_handler(cmd_list->at_command, exp_answer, ser.rx_buff);
 
 		if (ret)
 			break;
@@ -253,7 +253,7 @@ static inline bool hm11_status_connected(void)
 	return true;
 }
 
-static void hm11_send_cmd_respond(const char *str)
+void hm11_send_cmd_respond(const char *str)
 {
 	if (hm11_status_connected())
 		uart_receiver_send_string(str);
@@ -265,7 +265,6 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 //	size_t cmd_sz = pfx_sz + 5;
 	char *rx_buff_ptr = ser.rx_buff, *end;
 	long alarm_hh, alarm_mm;
-#define RESPOND_BUFF_SZ	24
 	char str[RESPOND_BUFF_SZ];
 
 	cmd->type = HOST_CMD_NONE;
@@ -290,9 +289,8 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 
 	if (!strncmp("INFO", rx_buff_ptr, 4) != 0) {
 		printk(HM_PFX "got hostcmd: get common info\n");
-		/* TODO: send respond later */
-		hm11_send_cmd_respond("NO-INFO");
 
+		/* we will send respond later */
 		cmd->delay_sec = 0;
 		cmd->type = HOST_CMD_COMMON_INFO;
 		return 0;
@@ -328,7 +326,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 	}
 
 	printk(HM_PFX "got hostcmd: wait for alarm for %ld:%ld\n", alarm_hh, alarm_mm);
-	snprintf(str, RESPOND_BUFF_SZ, "WAIT %2ld:%2ld", alarm_hh, alarm_mm);
+	snprintf(str, RESPOND_BUFF_SZ, "SLEEP %2ld:%2ld", alarm_hh, alarm_mm);
 	/* TODO: send respond after alarm schedule */
 	hm11_send_cmd_respond(str);
 

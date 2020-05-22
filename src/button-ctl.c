@@ -67,6 +67,7 @@ static void button_ctl_worker(void)
 	printk("RFF: got into button ctl worker\n");
 
 	while (true) {
+		// printk("* button worker\n");
 		button_raw_fill();
 		button_raw_process();
 

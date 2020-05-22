@@ -192,14 +192,14 @@ bool rtc_is_alarm(void)
 	return rtc_get_time() >= rtc_get_alarm();
 }
 
-void atomic_state_set(uint8_t data)
+void atomic_state_set(uint16_t data)
 {
 	BKP->DR3 = data;
 }
 
-uint8_t atomic_state_get(void)
+uint16_t atomic_state_get(void)
 {
-	return (uint8_t)(BKP->DR3);
+	return (uint16_t)(BKP->DR3);
 }
 
 void backup_data_set(uint32_t data)

@@ -5,6 +5,7 @@
 
 void signal_led_init(void);
 void led_gpio_enable(bool on);
+void led_gpio_enable_if_not_blinking(bool on);
 void led_gpio_blink(u16_t on, u16_t off, u16_t count);
 
 #endif

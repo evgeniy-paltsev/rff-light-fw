@@ -16,7 +16,7 @@ static struct signal_led_ctx {
 } signal_led;
 
 /* minimum priority */
-#define SIGNAL_LED_THREAD_PRIORITY	(CONFIG_NUM_PREEMPT_PRIORITIES - 2)
+#define SIGNAL_LED_THREAD_PRIORITY	(CONFIG_NUM_PREEMPT_PRIORITIES - 1)
 #define SIGNAL_LED_THREAD_STACKSIZE	400
 #define SIGNAL_LED_PIN			DT_ALIAS_LED0_GPIOS_PIN
 
@@ -45,13 +45,19 @@ void signal_led_init(void)
 	k_thread_start(led_worker_th);
 }
 
+void led_gpio_enable_if_not_blinking(bool on)
+{
+	if (signal_led.led_blink_count == 0)
+		led_gpio_enable(on);
+}
+
 void led_gpio_enable(bool on)
 {
 	// TODO: do we need to check if thred is running
 	/* suspend in case of led is already blinking? */
 	k_thread_suspend(led_worker_th);
 
-	printk("RFF: led gpio thread: %s\n", k_thread_state_str(led_worker_th));
+	//printk("RFF: led gpio thread: %s\n", k_thread_state_str(led_worker_th));
 
 	if (on)
 		gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
@@ -77,11 +83,14 @@ static void signal_led_worker(void)
 	while (true) {
 		printk("RFF: got into led blink worker\n");
 
-		while (signal_led.led_blink_count--) {
+		while (signal_led.led_blink_count) {
+			// printk("* led worker: count %u\n", signal_led.led_blink_count);
 			gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 0);
 			k_sleep(signal_led.led_on_time);
 			gpio_pin_set(signal_led.gpio_dev, SIGNAL_LED_PIN, 1);
 			k_sleep(signal_led.led_off_time);
+
+			signal_led.led_blink_count--;
 		}
 
 		k_thread_suspend(led_worker_th);
