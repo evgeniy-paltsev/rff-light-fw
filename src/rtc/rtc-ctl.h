@@ -4,7 +4,7 @@
 #include <soc.h>
 #include <sys/printk.h>
 
-void rtc_init(void);
+void rtc_init(uint16_t atomic_state);
 
 void rtc_set_alarm(uint32_t wait_seconds);
 bool rtc_is_alarm(void);

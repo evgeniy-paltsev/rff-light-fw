@@ -25,12 +25,18 @@
 
 
 enum disarm_options {
-	A_DISARM_NONE				= 0,      /* initial value */
-	A_DISARM_NEW				= BIT(0), /* public */
+	A_DISARM_NEW				= BIT(0), /* public, W/O */
 	/* primary triggered */
 	A_DISARM_PRIMARY			= BIT(1), /* private, sticky */
 	/* secondary triggered */
 	A_DISARM_SECONDARY			= BIT(2), /* private, sticky */
+	/* @A_ALARM_FINISHED - current alarm finished, we can stop alarm thread
+	 * and clean all resources */
+	A_ALARM_FINISHED			= BIT(3), /* public, R/O */
+	/* @A_ALARM_NEW - value for new alarm start */
+	A_ALARM_NEW				= 0,
+	/* @A_ALARM_POR_VALUE - value for first POR (when RTC isn't initialized) */
+	A_ALARM_POR_VALUE			= A_ALARM_FINISHED,
 };
 
 //__attribute__((deprecated))
@@ -65,7 +71,7 @@ struct core_model_params {
 struct core_model_io {
 	/* input & output - RW */
 	/*  !!! backed up in battery domain memory !!! */
-	uint16_t disarm_info;
+	uint16_t atomic_alarm_info;
 	/*  !!! backed up in battery domain memory !!! */
 	uint32_t disarm_time_adjustment;
 
@@ -74,11 +80,10 @@ struct core_model_io {
 	uint32_t brightnes_curr_value;
 	enum brightnes_value_ops brightnes_from;
 	enum brightnes_value_ops brightnes_to;
-	/* @finished - current alarm finished, we can stop alarm thread and
-	 * clean all resources */
-	bool finished;
 };
 
 void do_alarm_model(const uint32_t rtc_time, struct core_model_io *io, const struct core_model_params *params);
+bool alarm_finished(struct core_model_io *io);
+void set_disarm_new(struct core_model_io *io);
 
 #endif

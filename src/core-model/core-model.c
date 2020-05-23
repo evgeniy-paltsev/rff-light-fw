@@ -75,45 +75,67 @@ static void set_const_brightness(struct core_model_io *io,
 	io->brightnes_to = brightnes;
 }
 
+static void set_alarm_finished(struct core_model_io *io)
+{
+	io->atomic_alarm_info |= A_ALARM_FINISHED;
+	log_info("ALARM: mark as finished\n");
+}
+
+bool alarm_finished(struct core_model_io *io)
+{
+	return io->atomic_alarm_info & A_ALARM_FINISHED;
+}
+
+void set_disarm_new(struct core_model_io *io)
+{
+	io->atomic_alarm_info |= A_DISARM_NEW;
+}
+
 static void disarm_adjust_secondary(const uint32_t adjustment,
 				    struct core_model_io *io)
 {
-	dynamic_assert(!(io->disarm_info & A_DISARM_SECONDARY));
+	dynamic_assert(!(io->atomic_alarm_info & A_DISARM_SECONDARY));
 
 	log_info("ALARM: mark secondary disarm with adjustment %u\n", adjustment);
 
 	//printf("disarm_time_adjustment %u rtc_time -\n", io->disarm_time_adjustment);
 
-	io->disarm_info |= A_DISARM_SECONDARY;
+	io->atomic_alarm_info |= A_DISARM_SECONDARY;
 	io->disarm_time_adjustment = adjustment;
 }
 
 static void disarm_adjust_primary(const uint32_t adjustment,
 				  struct core_model_io *io)
 {
-	dynamic_assert(!(io->disarm_info & A_DISARM_PRIMARY));
+	dynamic_assert(!(io->atomic_alarm_info & A_DISARM_PRIMARY));
 	dynamic_assert(io->disarm_time_adjustment == 0);
 
 	log_info("ALARM: mark primary disarm with adjustment %u\n", adjustment);
 
-	io->disarm_info |= A_DISARM_PRIMARY;
+	io->atomic_alarm_info |= A_DISARM_PRIMARY;
 	io->disarm_time_adjustment = adjustment;
+}
+
+static void do_alarm_finished(struct core_model_io *io)
+{
+	io->atomic_alarm_info &= ~A_DISARM_NEW;
+	set_const_brightness(io, BRIGHTNESS_OFF);
 }
 
 static void process_new_disarm(const uint32_t rtc_time,
 			       struct core_model_io *io,
 			       const struct core_model_params *params)
 {
-	io->disarm_info &= ~A_DISARM_NEW;
+	io->atomic_alarm_info &= ~A_DISARM_NEW;
 
 	/* all possible disarms are done */
-	if (io->disarm_info & A_DISARM_SECONDARY)
+	if (io->atomic_alarm_info & A_DISARM_SECONDARY)
 		return;
 
-	if (io->disarm_info & A_DISARM_PRIMARY) {
+	if (io->atomic_alarm_info & A_DISARM_PRIMARY) {
 		/* determine disarm flags depending on the current primary disarm state */
 
-		dynamic_assert(!(io->disarm_info & A_DISARM_SECONDARY));
+		dynamic_assert(!(io->atomic_alarm_info & A_DISARM_SECONDARY));
 
 		uint32_t model_time = rtc_time - io->disarm_time_adjustment;
 		uint32_t time_since_disarmed_to_mid = model_time - params->decrease_to_mid_time;
@@ -167,26 +189,46 @@ static void process_new_disarm(const uint32_t rtc_time,
 	}
 }
 
+static inline bool no_disarm_pending(struct core_model_io *io)
+{
+	if (io->atomic_alarm_info & A_DISARM_NEW)
+		return false;
+
+	if (io->atomic_alarm_info & A_DISARM_PRIMARY)
+		return false;
+
+	if (io->atomic_alarm_info & A_DISARM_SECONDARY)
+		return false;
+
+	return true;
+}
+
 void do_alarm_model(const uint32_t rtc_time,
 		    struct core_model_io *io,
 		    const struct core_model_params *params)
 {
-	if (io->disarm_info & A_DISARM_NEW)
+	if (io->atomic_alarm_info & A_ALARM_FINISHED) {
+		do_alarm_finished(io);
+
+		return;
+	}
+
+	if (io->atomic_alarm_info & A_DISARM_NEW)
 		process_new_disarm(rtc_time, io, params);
 
-	if (io->disarm_info == A_DISARM_NONE) {
+	if (no_disarm_pending(io)) {
 		do_alarm_model_direct(rtc_time, io, params);
 
 		return;
 	}
 
-	if (io->disarm_info & A_DISARM_SECONDARY) {
+	if (io->atomic_alarm_info & A_DISARM_SECONDARY) {
 		do_alarm_model_disarmed_late(rtc_time, io, params);
 
 		return;
 	}
 
-	if (io->disarm_info & A_DISARM_PRIMARY) {
+	if (io->atomic_alarm_info & A_DISARM_PRIMARY) {
 		do_alarm_model_disarmed_early(rtc_time, io, params);
 
 		return;
@@ -204,8 +246,6 @@ static void do_alarm_model_disarmed_late(const uint32_t rtc_time,
 	dynamic_assert(rtc_time >= io->disarm_time_adjustment);
 	model_time = rtc_time - io->disarm_time_adjustment;
 
-	io->finished = false;
-
 	if (model_time < params->decrease_to_zero_time) {
 		log_if_zero(model_time, "ALARM: disarmed_late: start decreasing brightness to ZERO for %us at %us\n", params->decrease_to_zero_time, rtc_time);
 		io->brightnes_period = params->decrease_to_zero_time;
@@ -219,7 +259,7 @@ static void do_alarm_model_disarmed_late(const uint32_t rtc_time,
 	/* anything after decrease from middle to zero is always zero */
 	log_info("ALARM: disarmed_late: mark alarm finished at %u\n", rtc_time);
 	set_const_brightness(io, BRIGHTNESS_OFF);
-	io->finished = true;
+	set_alarm_finished(io);
 
 	return;
 }
@@ -234,8 +274,6 @@ static void do_alarm_model_disarmed_early(const uint32_t rtc_time,
 	model_time = rtc_time - io->disarm_time_adjustment;
 
 	//printf("model_time %u rtc_time %u\n", model_time, rtc_time);
-
-	io->finished = false;
 
 	/*
 	 * TODO: do we want here dynamic forward time instead of constant?
@@ -281,7 +319,7 @@ static void do_alarm_model_disarmed_early(const uint32_t rtc_time,
 	/* anything after decrease from middle to zero is zero */
 	log_info("ALARM: disarmed_early: mark alarm finished at %u\n", rtc_time);
 	set_const_brightness(io, BRIGHTNESS_OFF);
-	io->finished = true;
+	set_alarm_finished(io);
 
 	return;
 }
@@ -294,8 +332,6 @@ static void do_alarm_model_direct(const uint32_t rtc_time,
 				  struct core_model_io *io,
 				  const struct core_model_params *params)
 {
-	io->finished = false;
-
 	if (rtc_time < params->wait_time) {
 		log_if_zero(rtc_time, "ALARM: direct: start waiting %us before trigger\n", params->wait_time);
 		set_const_brightness(io, BRIGHTNESS_OFF);
@@ -383,7 +419,7 @@ static void do_alarm_model_direct(const uint32_t rtc_time,
 	/* anything after decrease from middle to zero is zero */
 	log_info("ALARM: direct: mark alarm finished at %u\n", rtc_time);
 	set_const_brightness(io, BRIGHTNESS_OFF);
-	io->finished = true;
+	set_alarm_finished(io);
 
 	return;
 }

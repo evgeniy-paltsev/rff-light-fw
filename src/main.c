@@ -75,18 +75,18 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	printk("RFF: got into alarm worker\n");
 
 	alarm_params.wait_time = rtc_get_alarm();
-	io.disarm_info = atomic_state_get();
+	io.atomic_alarm_info = atomic_state_get();
 	io.disarm_time_adjustment = backup_data_get();
 
 	do {
 		// printk("* alarm worker\n");
 
 		if (disarm_status_check_and_reset())
-			io.disarm_info |= A_DISARM_NEW;
+			set_disarm_new(&io);
 
 		do_alarm_model(rtc_get_time(), &io, &alarm_params);
 		backup_data_set(io.disarm_time_adjustment);
-		atomic_state_set(io.disarm_info);
+		atomic_state_set(io.atomic_alarm_info);
 		led_mark_xlation(io.brightnes_from, io.brightnes_to);
 		brightness_log_xlate_to_2_auto(io.brightnes_from,
 					       io.brightnes_to,
@@ -99,7 +99,7 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 
 		k_sleep(100);
 
-	} while (!io.finished);
+	} while (!alarm_finished(&io));
 
 	printk("RFF: alarm finished at %u\n", rtc_get_time());
 }
@@ -133,7 +133,7 @@ static void alarm_init_new(uint32_t sleep_time)
 	/* other params left unchanged */
 	alarm_params.wait_time = sleep_time - RISE_TIME_S;
 	backup_data_set(0);
-	atomic_state_set(A_DISARM_NONE);
+	atomic_state_set(A_ALARM_NEW);
 	rtc_set_alarm(alarm_params.wait_time);
 }
 
@@ -232,7 +232,7 @@ void main(void)
 			(SLEEP_TIME_S % (60 * 60)) % 60,
 			RISE_TIME_S / 60, HOLD_MAXT_S / 60);
 
-	rtc_init();
+	rtc_init(A_ALARM_POR_VALUE);
 	button_io_init(true, disarm_alarm_button);
 	button_print_debug();
 	bt_uart_init();

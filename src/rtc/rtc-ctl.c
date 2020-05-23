@@ -53,14 +53,14 @@ static int lse_init(void)
 
 #define RTC_TIMEOUT		0xFFFF
 
-static void backup_domain_init(void)
+static void backup_domain_init(uint16_t atomic_state)
 {
-	atomic_state_set(0);
+	atomic_state_set(atomic_state);
 	backup_data_set(0);
 	backup_alarm(0xFFFFFFFF);
 }
 
-static void rtc_configure(void)
+static void rtc_configure(uint16_t atomic_state)
 {
 	uint32_t timeout = RTC_TIMEOUT;
 
@@ -85,12 +85,12 @@ static void rtc_configure(void)
 	while (!(RTC->CRL & RTC_CRL_RTOFF) && timeout--)
 		__NOP();
 
-	backup_domain_init();
+	backup_domain_init(atomic_state);
 
 	printk("RTC configuration %s, timeout val: %u\n", timeout ? "OK" : "FAIL", timeout);
 }
 
-static int rtc_enable(void)
+static int rtc_enable(uint16_t atomic_state)
 {
 	uint32_t timeout = RTC_TIMEOUT;
 
@@ -109,7 +109,7 @@ static int rtc_enable(void)
 	if ((RCC->BDCR & RCC_BDCR_RTCEN) != RCC_BDCR_RTCEN) {
 		printk("RTC is disabled, reprogram\n");
 		RCC->BDCR |= RCC_BDCR_RTCEN;
-		rtc_configure();
+		rtc_configure(atomic_state);
 	} else {
 		/* wait for read synchronization is done */
 		while (!(RTC->CRL & RTC_CRL_RSF) && timeout--)
@@ -119,17 +119,17 @@ static int rtc_enable(void)
 	return 0;
 }
 
-static void clock_init()
+static void clock_init(uint16_t atomic_state)
 {
 	if (!lse_init()) {
-		rtc_enable();
+		rtc_enable(atomic_state);
 	}
 }
 
-void rtc_init(void)
+void rtc_init(uint16_t atomic_state)
 {
 	disable_clk_gate_and_protection();
-	clock_init();
+	clock_init(atomic_state);
 }
 
 static void backup_alarm(uint32_t wait_seconds)
