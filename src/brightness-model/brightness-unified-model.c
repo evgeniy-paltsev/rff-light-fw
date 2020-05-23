@@ -3,6 +3,8 @@
 #include <math.h>
 
 #include "brightness-unified-model.h"
+#include "../pwm/tim3-pwm.h"
+#include "../dynamic-assert.h"
 
 
 #define MAX_TIM_PWM		0xFFFF
@@ -57,7 +59,26 @@ static void set_leds(uint32_t value, enum brightnes_geometry_ops geometry,
 		set_sequential(value, led0, led1);
 }
 
-static uint32_t brightnes_ops_to_value(enum brightnes_value_ops ops)
+static uint32_t get_this_or_off_value(enum brightnes_value_ops pev_ops,
+				      enum brightnes_value_ops new_ops)
+{
+	/* We need to read value from PWM Timer only on first
+	 * BRIGHTNESS_THIS_OR_OFF ops we get, so we had to store it somewhere */
+	static uint32_t cached_value = OFF_OUT_VAL;
+
+	dynamic_assert(new_ops == BRIGHTNESS_THIS_OR_OFF);
+
+	if (pev_ops != BRIGHTNESS_THIS_OR_OFF) {
+		cached_value = get_curr_pwm_value();
+
+		if (cached_value > MAX_OUT_VAL)
+			cached_value = MAX_OUT_VAL;
+	}
+
+	return cached_value;
+}
+
+static uint32_t brightnes_to_get_value(enum brightnes_value_ops ops)
 {
 	if (ops == BRIGHTNESS_OFF)
 		return OFF_OUT_VAL;
@@ -66,8 +87,27 @@ static uint32_t brightnes_ops_to_value(enum brightnes_value_ops ops)
 	else if (ops == BRIGHTNESS_MAX)
 		return MAX_OUT_VAL;
 	else
-		/* we don't support BRIGHTNESS_THIS_OR_OFF yet */
 		return OFF_OUT_VAL;
+}
+
+static uint32_t brightnes_from_get_value(enum brightnes_value_ops ops)
+{
+	/* Reset value. State crap :( */
+	static enum brightnes_value_ops pev_ops = BRIGHTNESS_OFF;
+	uint32_t new_value;
+
+	if (ops == BRIGHTNESS_OFF)
+		new_value = OFF_OUT_VAL;
+	else if (ops == BRIGHTNESS_MID)
+		new_value = MID_OUT_VAL;
+	else if (ops == BRIGHTNESS_MAX)
+		new_value = MAX_OUT_VAL;
+	else
+		new_value = get_this_or_off_value(pev_ops, ops);
+
+	pev_ops = ops;
+
+	return new_value;
 }
 
 void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
@@ -76,7 +116,10 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 				    uint32_t xlate_value,
 				    uint32_t *led0, uint32_t *led1)
 {
-	uint32_t value_to = brightnes_ops_to_value(brightnes_to);
+	uint32_t value_to = brightnes_to_get_value(brightnes_to);
+
+	/* BRIGHTNESS_THIS_OR_OFF can be ony starting point, not finish one */
+	dynamic_assert(brightnes_to != BRIGHTNESS_THIS_OR_OFF);
 
 	if (brightnes_from == brightnes_to) {
 		set_leds(value_to, B_LED_PARALLEL, led0, led1);
@@ -91,17 +134,20 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 		return;
 	}
 
-	log_info("%s:%d brightnes_period: %u, xlate_value: %u\n", __func__, __LINE__, brightnes_period, xlate_value);
+	log_info("%s:%d brightnes_period: %u, xlate_value: %u\n", __func__,
+		 __LINE__, brightnes_period, xlate_value);
 
 
-	uint32_t value_from = brightnes_ops_to_value(brightnes_from);
+	uint32_t value_from = brightnes_from_get_value(brightnes_from);
 	uint32_t max_output, min_output, curr_xlate, value;
 	enum brightnes_geometry_ops geometry;
 
 	if (xlate_value >= brightnes_period)
 		xlate_value = brightnes_period - 1;
 
-	log_info("%s:%d brightnes_period: %u, xlate_value: %u, value_from: %x, value_to: %x\n", __func__, __LINE__, brightnes_period, xlate_value, value_from, value_to);
+	log_info("%s:%d brightnes_period: %u, xlate_value: %u, value_from: %x, value_to: %x\n",
+		 __func__, __LINE__, brightnes_period, xlate_value,
+		 value_from, value_to);
 
 	if (value_from < value_to) {
 		max_output = value_to;
@@ -115,7 +161,8 @@ void brightness_log_xlate_to_2_auto(enum brightnes_value_ops brightnes_from,
 		geometry = B_LED_PARALLEL;
 	}
 
-	log_info("%s:%d curr_xlate: %u, xlate_value: %u, max_output: %x, min_output: %x\n", __func__, __LINE__, curr_xlate, xlate_value, max_output, min_output);
+	log_info("%s:%d curr_xlate: %u, xlate_value: %u, max_output: %x, min_output: %x\n",
+		 __func__, __LINE__, curr_xlate, xlate_value, max_output, min_output);
 
 	/* TODO: cache const values */
 	float log_const = ((brightnes_period - 1) * log10(2)) / (log10((max_output + 1) - min_output));
@@ -133,7 +180,7 @@ void brightness_log_xlate_to_2(enum brightnes_value_ops brightnes_from,
 			       uint32_t xlate_value,
 			       uint32_t *led0, uint32_t *led1)
 {
-	uint32_t value_to = brightnes_ops_to_value(brightnes_to);
+	uint32_t value_to = brightnes_to_get_value(brightnes_to);
 
 	if (brightnes_from == brightnes_to) {
 		set_leds(value_to, geometry, led0, led1);
@@ -149,7 +196,7 @@ void brightness_log_xlate_to_2(enum brightnes_value_ops brightnes_from,
 	}
 
 
-	uint32_t value_from = brightnes_ops_to_value(brightnes_from);
+	uint32_t value_from = brightnes_from_get_value(brightnes_from);
 	uint32_t max_output, min_output, curr_xlate, value;
 
 	if (xlate_value >= brightnes_period)

@@ -76,3 +76,8 @@ void timer3_pwm_init(void)
 
 	timer3_pwm_gpio_init();
 }
+
+uint32_t get_curr_pwm_value(void)
+{
+	return (uint32_t)TIM3->CCR4 + (uint32_t)TIM3->CCR3;
+}

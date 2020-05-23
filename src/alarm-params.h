@@ -1,8 +1,19 @@
 #ifndef ALARM_PARAMS_H_
 #define ALARM_PARAMS_H_
 
-#define RISE_TIME_S		30 //(20 * 60)//60/
-#define HOLD_TIME_S		30 //(15 * 60)//60/
+#ifdef CONFIG_ALARM_TESTING_SESSION
+
+#define RISE_TIME_S		30
+#define HOLD_MAXT_S		30
+#define HOLD_MIDT_S		40
+
+#else
+
+#define RISE_TIME_S		(20 * 60)
+#define HOLD_MAXT_S		(15 * 60)
+#define HOLD_MIDT_S		(60 * 60)
+
+#endif /* CONFIG_ALARM_TESTING_SESSION */
 
 #define SLEEP_TIME_MIN		30
 #define SLEEP_TIME_HOURS	7

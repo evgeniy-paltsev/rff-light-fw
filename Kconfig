@@ -1,0 +1,13 @@
+# Config for counter alarm sample
+
+# Copyright (c) 2020 RustyFennecFox (RFF)
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "RFF light alarrm application"
+
+config ALARM_TESTING_SESSION
+	bool "Set default delays values for manual testing"
+	help
+	  Set default values of rise time, hold max/mid time for manual testing
+
+source "Kconfig.zephyr"

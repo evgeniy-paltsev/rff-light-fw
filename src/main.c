@@ -39,9 +39,9 @@ static void alarm_sched_worker(void *, void *, void *);
 static struct core_model_params alarm_params = {
 	.wait_time             = SLEEP_TIME_S - RISE_TIME_S,
 	.rise_time             = RISE_TIME_S,
-	.hold_max_time         = HOLD_TIME_S, /* 15 min */
+	.hold_max_time         = HOLD_MAXT_S, /* 15 min */
 	.decrease_to_mid_time  = 10,          /* 10 sec */
-	.hold_mid_time         = 60 * 60,     /* 1 hour */
+	.hold_mid_time         = HOLD_MIDT_S, /* 1 hour */
 	.decrease_to_zero_time = 15,          /* 15 sec */
 	.disarm_hold_mid_time  = 15 * 60,     /* 15 min */
 };
@@ -58,13 +58,6 @@ static bool disarm_status_check_and_reset(void)
 	k_mutex_unlock(&disarm_mtx);
 
 	return disarm_status;
-}
-
-static void disarm_status_set(void)
-{
-	k_mutex_lock(&disarm_mtx, K_FOREVER);
-	alarm_info.disarm_alarm = true;
-	k_mutex_unlock(&disarm_mtx);
 }
 
 static void led_mark_xlation(enum brightnes_value_ops brightnes_from,
@@ -111,13 +104,23 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	printk("RFF: alarm finished at %u\n", rtc_get_time());
 }
 
-static void disarm_alarm_force(void)
+static inline void disarm_status_set(void)
 {
-	printk("RFF: disarm_alarm_force\n");
-
 	k_mutex_lock(&disarm_mtx, K_FOREVER);
 	alarm_info.disarm_alarm = true;
 	k_mutex_unlock(&disarm_mtx);
+}
+
+static void disarm_alarm_bt(void)
+{
+	printk("RFF: disarm alarm via BT\n");
+	disarm_status_set();
+}
+
+static void disarm_alarm_button(void)
+{
+	printk("RFF: disarm alarm by button\n");
+	disarm_status_set();
 }
 
 static void alarm_init_new(uint32_t sleep_time)
@@ -223,13 +226,14 @@ void main(void)
 
 	printk("RFF: Hello World! %s\n", CONFIG_BOARD);
 
-	printk("Default alarm_params: default SLEEP_TIME_S %u:%u:%u, RISE_TIME %u m, HOLD_TIME %u m\n",
+	printk("%s alarm params: default SLEEP_TIME_S %u:%u:%u, RISE_TIME %u m, HOLD_TIME %u m\n",
+			IS_ENABLED(CONFIG_ALARM_TESTING_SESSION) ? "  ** test launch **  " : "RFF:",
 			SLEEP_TIME_S / (60 * 60), (SLEEP_TIME_S % (60 * 60)) / 60,
 			(SLEEP_TIME_S % (60 * 60)) % 60,
-			RISE_TIME_S / 60, HOLD_TIME_S / 60);
+			RISE_TIME_S / 60, HOLD_MAXT_S / 60);
 
 	rtc_init();
-	button_io_init(true, disarm_status_set);
+	button_io_init(true, disarm_alarm_button);
 	button_print_debug();
 	bt_uart_init();
 	signal_led_init();
@@ -247,7 +251,7 @@ void main(void)
 		if (host_cmd_curr.type == HOST_CMD_SCHEDULE_ALARM)
 			alarm_init_new_new(host_cmd_curr.delay_sec);
 		else if (host_cmd_curr.type == HOST_CMD_DISARM_ALARM)
-			disarm_alarm_force();
+			disarm_alarm_bt();
 		else if (host_cmd_curr.type == HOST_CMD_COMMON_INFO)
 			send_alarm_info();
 	}
