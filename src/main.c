@@ -79,8 +79,6 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	io.disarm_time_adjustment = backup_data_get();
 
 	do {
-		// printk("* alarm worker\n");
-
 		if (disarm_status_check_and_reset())
 			set_disarm_new(&io);
 
@@ -96,6 +94,7 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 
 		TIM3->CCR4 = led0;
 		TIM3->CCR3 = led1;
+		// printk("RFF: set leds 0x%04x : 0x%04x\n", led0, led1);
 
 		k_sleep(100);
 
@@ -186,7 +185,7 @@ static void check_for_alarm(void)
 {
 	if (button_get_state() == BUTTON_STATE_PRESSED)
 		alarm_init_new_new(SLEEP_TIME_S);
-	else
+	else if (!(atomic_state_get() & A_ALARM_FINISHED))
 		alarm_powerfault_restore();
 }
 

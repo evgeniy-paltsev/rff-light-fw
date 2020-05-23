@@ -4,7 +4,8 @@
 #include <soc.h>
 
 enum button_state {
-	BUTTON_STATE_NOT_PRESSED = 0,
+	BUTTON_STATE_POR_UNKNOWN = 0, /* fake state for POR corner case */
+	BUTTON_STATE_NOT_PRESSED,
 	BUTTON_STATE_PRESSED,
 	BUTTON_STATE_PRESSED_LONG
 };

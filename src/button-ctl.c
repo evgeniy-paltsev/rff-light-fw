@@ -3,6 +3,13 @@
 #include <drivers/gpio.h>
 #include <sys/printk.h>
 
+#ifdef BUTTON_DEBUG_LOG
+#define log_info(fmt, ...) ({ printk(fmt, ##__VA_ARGS__); })
+#else
+#define log_info(fmt, ...)
+#endif
+
+
 /* ULL defines are stil missing in zephyr 2.2.0 */
 #define __AC(X,Y)	(X##Y)
 #define _AC(X,Y)	__AC(X,Y)
@@ -23,8 +30,10 @@
 #define READ_PERIOD			25
 
 static struct device *button_gpio_dev;
-static volatile enum button_state button_state = BUTTON_STATE_NOT_PRESSED;
-static volatile enum button_state button_prew_state = BUTTON_STATE_NOT_PRESSED;
+/* HACK: we mark previous states of button as unknown so first button after POR
+ * won't call long callback in any case */
+static volatile enum button_state button_state = BUTTON_STATE_POR_UNKNOWN;
+static volatile enum button_state button_prew_state = BUTTON_STATE_POR_UNKNOWN;
 static u64_t reads_raw;
 static void (*long_pressed_cb_fn)(void);
 
@@ -74,6 +83,7 @@ static inline void button_raw_process(void)
 		prew_prew_state = button_prew_state;
 		button_prew_state = button_state;
 		button_state = new_state;
+		log_info("RFF: prew_prew_state %u new_state %u\n", prew_prew_state, new_state);
 
 		if (prew_prew_state == BUTTON_STATE_NOT_PRESSED && new_state == BUTTON_STATE_PRESSED_LONG)
 			call_for_long_cb();
