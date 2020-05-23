@@ -446,6 +446,7 @@ static void hm11_reset(void)
 
 int hm11_init(void)
 {
+	printk(HM_PFX "password for paring is \'"HM11_PASS"\'\n");
 	hm11_reset_init();
 	hm11_reset();
 
