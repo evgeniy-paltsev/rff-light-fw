@@ -33,10 +33,8 @@ void timer3_pwm_init(void)
 	//Frequency
 	TIM3->ARR = 0xFFFF;
 
-	//������� ����� ��������������� ������ �������� ����������������
 	TIM3->CR1 |=	TIM_CR1_ARPE;
 
-	//������� ����� ��������������� �������� �������� ���������
 //	TIM3->CCMR1 |=	TIM_CCMR1_OC1PE;
 //	TIM3->CCMR1 |=	TIM_CCMR1_OC2PE;
 	TIM3->CCMR2 |=	TIM_CCMR2_OC3PE;
