@@ -42,7 +42,7 @@ static struct core_model_params alarm_params = {
 	.hold_max_time         = HOLD_MAXT_S, /* 15 min */
 	.decrease_to_mid_time  = 10,          /* 10 sec */
 	.hold_mid_time         = HOLD_MIDT_S, /* 1 hour */
-	.decrease_to_zero_time = 15,          /* 15 sec */
+	.decrease_to_zero_time = 25,          /* 25 sec */
 	.disarm_hold_mid_time  = 15 * 60,     /* 15 min */
 };
 

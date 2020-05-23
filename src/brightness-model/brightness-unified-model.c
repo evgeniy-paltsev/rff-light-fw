@@ -11,8 +11,9 @@
 #define MIN_TIM_PWM		0x0
 
 #define MAX_OUT_VAL		(MAX_TIM_PWM * 2)
-#define MID_OUT_VAL		0xEFF
+#define MID_OUT_VAL		0x1BFE
 #define OFF_OUT_VAL		MIN_TIM_PWM
+
 
 #ifdef BRIGHTNESS_DEBUG_LOG
 #define log_info(fmt, ...) ({ printk(fmt, ##__VA_ARGS__); })
