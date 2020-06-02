@@ -164,7 +164,9 @@ void rtc_set_alarm(uint32_t wait_seconds)
 	while (!(RTC->CRL & RTC_CRL_RTOFF) && timeout--)
 		__NOP();
 
-	printk("RTC set_alarm %s\n", timeout ? "OK" : "FAIL");
+	printk("RTC set_alarm, curr time -> %u, wait for -> %u: %s\n",
+			rtc_get_time(), rtc_get_alarm(),
+			timeout ? "OK" : "FAIL");
 }
 
 /* TODO: support CNTL overflow */

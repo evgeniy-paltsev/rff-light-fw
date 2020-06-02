@@ -72,7 +72,7 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	struct core_model_io io;
 	uint32_t led0, led1;
 
-	printk("RFF: got into alarm worker\n");
+	printk("RFF: got into alarm worker, curr time %u\n", rtc_get_time());
 
 	alarm_params.wait_time = rtc_get_alarm();
 	io.atomic_alarm_info = atomic_state_get();
@@ -124,13 +124,20 @@ static void disarm_alarm_button(void)
 
 static void alarm_init_new(uint32_t sleep_time)
 {
-	printk("RFF: schedule new alarm for: %uh %um %us\n",
+	printk("RFF: schedule new alarm for: %uh %um %us (%us)\n",
 			(sleep_time / (60 * 60)),
 			(sleep_time % (60 * 60)) / 60,
-			(sleep_time % (60 * 60)) % 60);
+			(sleep_time % (60 * 60)) % 60,
+			(sleep_time));
 
 	/* other params left unchanged */
 	alarm_params.wait_time = sleep_time - RISE_TIME_S;
+	printk("RFF: trigger wait time: %uh %um %us (%us)\n",
+			(alarm_params.wait_time / (60 * 60)),
+			(alarm_params.wait_time % (60 * 60)) / 60,
+			(alarm_params.wait_time % (60 * 60)) % 60,
+			(alarm_params.wait_time));
+
 	backup_data_set(0);
 	atomic_state_set(A_ALARM_NEW);
 	rtc_set_alarm(alarm_params.wait_time);
@@ -155,7 +162,7 @@ static void alarm_powerfault_restore(void)
 
 static void alarm_init_new_new(uint32_t sleep_time)
 {
-	printk("RFF: start new alarm\n");
+	printk("RFF: start new alarm for sleep time %us\n", sleep_time);
 
 	dynamic_assert(sleep_time >= RISE_TIME_S);
 
@@ -189,33 +196,67 @@ static void check_for_alarm(void)
 		alarm_powerfault_restore();
 }
 
+static void send_alarm_info_hank(const char *respond)
+{
+	printk("RFF: alarm_info: %s\n", respond);
+	hm11_send_cmd_respond(respond);
+}
+
 static void send_alarm_info(void)
 {
-	if (true /* FIXME: check for alarm exists */) {
+	if (atomic_state_get() & A_ALARM_FINISHED) {
+		send_alarm_info_hank("NO ALARM");
+	} else {
 		char str[RESPOND_BUFF_SZ];
-		uint32_t remind_time = 0;
+		uint32_t curr_time, remind_time = 0;
 		uint32_t sleep_time = alarm_params.wait_time + alarm_params.rise_time;
 
-		if (sleep_time > rtc_get_time())
-			remind_time = sleep_time - rtc_get_time();
+		curr_time = rtc_get_time();
 
-		snprintf(str, RESPOND_BUFF_SZ, "REM %2d:%2d:%2d",
+		if (sleep_time > curr_time)
+			remind_time = sleep_time - curr_time;
+		else
+			remind_time = 0;
+
+		/* time remains before wake up */
+		snprintf(str, RESPOND_BUFF_SZ, "REM %u:%u:%u",
 			 (remind_time / (60 * 60)),
 			 ((remind_time % (60 * 60)) / 60),
 			 ((remind_time % (60 * 60)) % 60));
 
-		hm11_send_cmd_respond(str);
-
+		send_alarm_info_hank(str);
 		/* hacks for nRF Connect users :) */
-		k_sleep(2500);
+		k_sleep(3000);
 
-		snprintf(str, RESPOND_BUFF_SZ, "SLEEP %2d:%2d",
+		if (alarm_params.wait_time > curr_time)
+			remind_time = alarm_params.wait_time - curr_time;
+		else
+			remind_time = 0;
+
+		/* time remains before rise */
+		snprintf(str, RESPOND_BUFF_SZ, "wREM %u:%u:%u",
+			 (remind_time / (60 * 60)),
+			 ((remind_time % (60 * 60)) / 60),
+			 ((remind_time % (60 * 60)) % 60));
+
+		send_alarm_info_hank(str);
+		/* hacks for nRF Connect users :) */
+		k_sleep(3000);
+
+		snprintf(str, RESPOND_BUFF_SZ, "SLEEP %u:%u",
 			 (sleep_time / (60 * 60)),
 			 ((sleep_time % (60 * 60)) / 60));
 
-		hm11_send_cmd_respond(str);
-	} else {
-		hm11_send_cmd_respond("NO ALARM");
+		send_alarm_info_hank(str);
+		/* hacks for nRF Connect users :) */
+		k_sleep(3000);
+
+		snprintf(str, RESPOND_BUFF_SZ, "CURRt %u:%u:%u",
+			 (curr_time / (60 * 60)),
+			 ((curr_time % (60 * 60)) / 60),
+			 ((curr_time % (60 * 60)) % 60));
+
+		send_alarm_info_hank(str);
 	}
 }
 
