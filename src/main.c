@@ -67,6 +67,45 @@ static void led_mark_xlation(enum brightnes_value_ops brightnes_from,
 	led_gpio_enable_if_not_blinking(brightnes_from != brightnes_to);
 }
 
+#define ALARM_SCHED_BACKOFF_MS		100
+
+static void rtc_watchdog(bool init, uint32_t curr_rtc)
+{
+	static uint32_t prev_rtc = 0, same_time_counter = 0, same_time_counter_max = 0;
+	static bool triggered = false;
+
+	uint32_t trashold = 1000 / ALARM_SCHED_BACKOFF_MS + 2;
+
+	if (init) {
+		prev_rtc = curr_rtc;
+		triggered = false;
+		same_time_counter = 0;
+		same_time_counter_max = 0;
+
+		return;
+	}
+
+	/* don't care about uint32_t overflow here */
+	if (prev_rtc == curr_rtc)
+		same_time_counter++;
+	else
+		same_time_counter = 0;
+
+	prev_rtc = curr_rtc;
+
+	if (same_time_counter >= trashold)
+		triggered = true;
+
+	if (same_time_counter > same_time_counter_max)
+		same_time_counter_max = same_time_counter;
+
+	if (triggered)
+		printk("RFF: detect rtc hang for max %u times (trashold = %u)\n",
+		       same_time_counter_max, trashold);
+}
+
+
+
 static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 {
 	struct core_model_io io;
@@ -78,10 +117,13 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	io.atomic_alarm_info = atomic_state_get();
 	io.disarm_time_adjustment = backup_data_get();
 
+	rtc_watchdog(true, rtc_get_time());
+
 	do {
 		if (disarm_status_check_and_reset())
 			set_disarm_new(&io);
 
+		rtc_watchdog(false, rtc_get_time());
 		do_alarm_model(rtc_get_time(), &io, &alarm_params);
 		backup_data_set(io.disarm_time_adjustment);
 		atomic_state_set(io.atomic_alarm_info);
@@ -96,7 +138,7 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 		TIM3->CCR3 = led1;
 		// printk("RFF: set leds 0x%04x : 0x%04x\n", led0, led1);
 
-		k_sleep(100);
+		k_sleep(ALARM_SCHED_BACKOFF_MS);
 
 	} while (!alarm_finished(&io));
 
