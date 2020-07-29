@@ -366,6 +366,15 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 		return 0;
 	}
 
+	if (!strncmp("PING", rx_buff_ptr, 4) != 0) {
+		printk(HM_PFX "got hostcmd: ping\n");
+		hm11_send_cmd_respond("ALIVE");
+
+		cmd->delay_sec = 0;
+		cmd->type = HOST_CMD_PING;
+		return 0;
+	}
+
 	if (!strncmp("INFO", rx_buff_ptr, 4) != 0) {
 		printk(HM_PFX "got hostcmd: get common info\n");
 

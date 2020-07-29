@@ -336,5 +336,7 @@ void main(void)
 			disarm_alarm_bt();
 		else if (host_cmd_curr.type == HOST_CMD_COMMON_INFO)
 			send_alarm_info();
+		/* Other command (HOST_CMD_PING) doesn't requre special handling
+		 * and fully processed in hm11_wait_for_host_cmd */
 	}
 }
