@@ -30,9 +30,11 @@ enum disarm_options {
 	A_DISARM_PRIMARY			= BIT(1), /* private, sticky */
 	/* secondary triggered */
 	A_DISARM_SECONDARY			= BIT(2), /* private, sticky */
+	/* disarm alarm before it trigger */
+	A_DISARM_PRE_CANCEL			= BIT(3), /* private, sticky */
 	/* @A_ALARM_FINISHED - current alarm finished, we can stop alarm thread
 	 * and clean all resources */
-	A_ALARM_FINISHED			= BIT(3), /* public, R/O */
+	A_ALARM_FINISHED			= BIT(4), /* public, R/O */
 	/* @A_ALARM_NEW - value for new alarm start */
 	A_ALARM_NEW				= 0,
 	/* @A_ALARM_POR_VALUE - value for first POR (when RTC isn't initialized) */

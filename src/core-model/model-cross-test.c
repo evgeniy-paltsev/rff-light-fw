@@ -337,95 +337,33 @@ static void check_a_disarm_before_trigger(void)
 	assert(io.brightnes_from == BRIGHTNESS_OFF);
 	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
-	/* disarming start */
+	/* disarming start - pre-cancel */
 	time_sec = 5;
+	assert(time_sec < params.wait_time);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
 	set_disarm_new(&io);
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == time_sec);
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	//printf("%d\n", io.brightnes_curr_value);
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(alarm_finished(&io));
+	/* disarm_time_adjustment shouldn't be touched */
+	assert(io.disarm_time_adjustment == 0);
+	assert(io.brightnes_period == 0);
 	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
+	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 6;
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 1);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 14;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 9);
-	assert(io.brightnes_curr_value == A__DECR_TO_MID_TIME - 1);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 15;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 16;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 64;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 65;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
+	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(alarm_finished(&io));
+	assert(io.disarm_time_adjustment == 0);
+	assert(io.brightnes_period == 0);
 	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 66;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 1);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 84;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 19);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
 	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 85;
@@ -482,81 +420,14 @@ static void check_a_disarm_before_trigger_2(void)
 	set_disarm_new(&io);
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == time_sec);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
+	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(alarm_finished(&io));
 	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	//printf("%d\n", io.brightnes_curr_value);
+	assert(io.brightnes_period == 0);
 	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 6;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 6);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 9;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 9);
-	assert(io.brightnes_curr_value == A__DECR_TO_MID_TIME - 1);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 10;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 59;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	time_sec = 60;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 61;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 1);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 79;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 0);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 19);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
 	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 80;
@@ -1835,96 +1706,47 @@ static void check_a_disarm_before_trigger__wsecondary(void)
 
 	/* disarming start */
 	time_sec = 5;
+	assert(time_sec < params.wait_time);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
 	set_disarm_new(&io);
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
 	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == time_sec);
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
+	assert(alarm_finished(&io));
+	assert(io.disarm_time_adjustment == 0);
+	assert(io.brightnes_period == 0);
 	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
+	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 6;
 	set_disarm_new(&io); /* false one, must be ignored */
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
 	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 1);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
+	assert(alarm_finished(&io));
+	assert(io.disarm_time_adjustment == 0);
+	assert(io.brightnes_period == 0);
+	assert(io.brightnes_curr_value == 0);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
+	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 14;
 	set_disarm_new(&io); /* false one, must be ignored */
 	do_alarm_model(time_sec, &io, &params);
 	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
 	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 5);
-	assert(io.brightnes_period == A__DECR_TO_MID_TIME);
-	assert(io.brightnes_curr_value == 9);
-	assert(io.brightnes_curr_value == A__DECR_TO_MID_TIME - 1);
-	assert(io.brightnes_from == BRIGHTNESS_THIS_OR_OFF);
-	assert(io.brightnes_to == BRIGHTNESS_MID);
-
-	/* second disarming start */
-	time_sec = 15;
-	set_disarm_new(&io);
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(io.atomic_alarm_info & A_DISARM_SECONDARY);
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 15);
-	assert(io.disarm_time_adjustment == time_sec);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
+	assert(alarm_finished(&io));
+	assert(io.disarm_time_adjustment == 0);
+	assert(io.brightnes_period == 0);
 	assert(io.brightnes_curr_value == 0);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 16;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(io.atomic_alarm_info & A_DISARM_SECONDARY);
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 15);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 1);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 19;
-	set_disarm_new(&io); /* false one, must be ignored */
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(io.atomic_alarm_info & A_DISARM_SECONDARY);
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 15);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	assert(io.brightnes_curr_value == 4);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
-	assert(io.brightnes_to == BRIGHTNESS_OFF);
-
-	time_sec = 34;
-	do_alarm_model(time_sec, &io, &params);
-	assert(!(io.atomic_alarm_info & A_DISARM_NEW));
-	assert(!alarm_finished(&io));
-	assert(io.disarm_time_adjustment == 15);
-	assert(io.brightnes_period == A__DECR_TO_ZERO_TIME);
-	//printf("%d\n", io.brightnes_curr_value);
-	assert(io.brightnes_curr_value == 19);
-	assert(io.brightnes_from == BRIGHTNESS_MID);
+	assert(io.brightnes_from == BRIGHTNESS_OFF);
 	assert(io.brightnes_to == BRIGHTNESS_OFF);
 
 	time_sec = 35;
@@ -1938,8 +1760,9 @@ static void check_a_disarm_before_trigger__wsecondary(void)
 	io.atomic_alarm_info &= ~A_ALARM_FINISHED; /* clear sticky flag so other times will realy tested */
 	set_disarm_new(&io); /* false one, must be ignored */
 	do_alarm_model(time_sec, &io, &params);
-	assert(io.atomic_alarm_info & A_DISARM_PRIMARY);
-	assert(io.atomic_alarm_info & A_DISARM_SECONDARY);
+	assert(io.atomic_alarm_info & A_DISARM_PRE_CANCEL);
+	assert(!(io.atomic_alarm_info & A_DISARM_PRIMARY));
+	assert(!(io.atomic_alarm_info & A_DISARM_SECONDARY));
 	assert(alarm_finished(&io));
 	assert(io.brightnes_from == BRIGHTNESS_OFF);
 	assert(io.brightnes_to == BRIGHTNESS_OFF);

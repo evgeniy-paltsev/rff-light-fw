@@ -28,6 +28,24 @@
  *     |    v /          \
  *   0_|____x/            \_
  *     ----------------------------------------> time
+ *     ^    ^
+ *     |    |
+ *     |    |
+ *     |    |
+ *     |    triggered (expected to be)
+ *     scheduled
+ *
+ *
+ * DISARM (x):--
+ *             |
+ * brightness  |
+ *     ^      /
+ * MAX_|     /
+ *     |    |
+ * MID_|    |
+ *     |    v
+ *   0_|____x_______________
+ *     ----------------------------------------> time
  *     ^       ^
  *     |       |
  *     |       |
@@ -59,6 +77,9 @@
 static void do_alarm_model_direct(const uint32_t rtc_time,
 				  struct core_model_io *io,
 				  const struct core_model_params *params);
+static void do_alarm_model_disarmed_pre_cancel(const uint32_t rtc_time,
+					       struct core_model_io *io,
+					       const struct core_model_params *params);
 static void do_alarm_model_disarmed_early(const uint32_t rtc_time,
 					  struct core_model_io *io,
 					  const struct core_model_params *params);
@@ -116,6 +137,16 @@ static void disarm_adjust_primary(const uint32_t adjustment,
 	io->disarm_time_adjustment = adjustment;
 }
 
+static void disarm_adjust_pre_cancel(struct core_model_io *io)
+{
+	dynamic_assert(!(io->atomic_alarm_info & A_DISARM_PRE_CANCEL));
+	dynamic_assert(io->disarm_time_adjustment == 0);
+
+	log_info("ALARM: mark pe-cancel disarm\n");
+
+	io->atomic_alarm_info |= A_DISARM_PRE_CANCEL;
+}
+
 static void do_alarm_finished(struct core_model_io *io)
 {
 	io->atomic_alarm_info &= ~A_DISARM_NEW;
@@ -130,6 +161,10 @@ static void process_new_disarm(const uint32_t rtc_time,
 
 	/* all possible disarms are done */
 	if (io->atomic_alarm_info & A_DISARM_SECONDARY)
+		return;
+
+	/* pre-cancel doesn't have any additional disarm */
+	if (io->atomic_alarm_info & A_DISARM_PRE_CANCEL)
 		return;
 
 	if (io->atomic_alarm_info & A_DISARM_PRIMARY) {
@@ -151,9 +186,9 @@ static void process_new_disarm(const uint32_t rtc_time,
 		uint32_t time_since_decr_mid = time_after_max_brght - params->hold_max_time;
 		uint32_t time_after_mid_brght = time_since_decr_mid - params->decrease_to_mid_time;
 
-		/* alarm is not triggered */
+		/* alarm is not triggered - it's pre-cancel */
 		if (rtc_time < params->wait_time) {
-			disarm_adjust_primary(rtc_time, io);
+			disarm_adjust_pre_cancel(io);
 		/*
 		 * time_since_triggered = ammount of time (sec) after alarm was triggered
 		 * effective in interval [0; params->rise_time)
@@ -194,6 +229,9 @@ static inline bool no_disarm_pending(struct core_model_io *io)
 	if (io->atomic_alarm_info & A_DISARM_NEW)
 		return false;
 
+	if (io->atomic_alarm_info & A_DISARM_PRE_CANCEL)
+		return false;
+
 	if (io->atomic_alarm_info & A_DISARM_PRIMARY)
 		return false;
 
@@ -230,6 +268,12 @@ void do_alarm_model(const uint32_t rtc_time,
 
 	if (io->atomic_alarm_info & A_DISARM_PRIMARY) {
 		do_alarm_model_disarmed_early(rtc_time, io, params);
+
+		return;
+	}
+
+	if (io->atomic_alarm_info & A_DISARM_PRE_CANCEL) {
+		do_alarm_model_disarmed_pre_cancel(rtc_time, io, params);
 
 		return;
 	}
@@ -318,6 +362,18 @@ static void do_alarm_model_disarmed_early(const uint32_t rtc_time,
 
 	/* anything after decrease from middle to zero is zero */
 	log_info("ALARM: disarmed_early: mark alarm finished at %u\n", rtc_time);
+	set_const_brightness(io, BRIGHTNESS_OFF);
+	set_alarm_finished(io);
+
+	return;
+}
+
+static void do_alarm_model_disarmed_pre_cancel(const uint32_t rtc_time,
+					       struct core_model_io *io,
+					       const struct core_model_params *params)
+{
+	/* immediately go to zero */
+	log_info("ALARM: disarmed_pre_cancel: mark alarm finished at %u\n", rtc_time);
 	set_const_brightness(io, BRIGHTNESS_OFF);
 	set_alarm_finished(io);
 
