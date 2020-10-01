@@ -361,7 +361,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 		/* TODO: send respond later */
 		hm11_send_cmd_respond("STOPPED");
 
-		cmd->delay_sec = 0;
+		cmd->cmd_u32_param_0 = 0;
 		cmd->type = HOST_CMD_DISARM_ALARM;
 		return 0;
 	}
@@ -370,7 +370,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 		printk(HM_PFX "got hostcmd: ping\n");
 		hm11_send_cmd_respond("ALIVE");
 
-		cmd->delay_sec = 0;
+		cmd->cmd_u32_param_0 = 0;
 		cmd->type = HOST_CMD_PING;
 		return 0;
 	}
@@ -379,7 +379,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 		printk(HM_PFX "got hostcmd: get common info\n");
 
 		/* we will send respond later */
-		cmd->delay_sec = 0;
+		cmd->cmd_u32_param_0 = 0;
 		cmd->type = HOST_CMD_COMMON_INFO;
 		return 0;
 	}
@@ -418,7 +418,7 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 	/* TODO: send respond after alarm schedule */
 	hm11_send_cmd_respond(str);
 
-	cmd->delay_sec = (alarm_hh * 60 + alarm_mm) * 60;
+	cmd->cmd_u32_param_0 = (alarm_hh * 60 + alarm_mm) * 60;
 	cmd->type = HOST_CMD_SCHEDULE_ALARM;
 	return 0;
 

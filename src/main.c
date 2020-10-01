@@ -331,7 +331,7 @@ void main(void)
 			continue;
 
 		if (host_cmd_curr.type == HOST_CMD_SCHEDULE_ALARM)
-			alarm_init_new_new(host_cmd_curr.delay_sec);
+			alarm_init_new_new(host_cmd_curr.cmd_u32_param_0);
 		else if (host_cmd_curr.type == HOST_CMD_DISARM_ALARM)
 			disarm_alarm_bt();
 		else if (host_cmd_curr.type == HOST_CMD_COMMON_INFO)

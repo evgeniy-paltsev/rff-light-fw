@@ -22,7 +22,7 @@ struct hm11_at_cmd {
 
 struct host_cmd {
 	enum host_cmd_type	type;
-	u32_t			delay_sec;
+	u32_t			cmd_u32_param_0;
 };
 
 extern struct hm11_at_cmd hm11_assert[];
