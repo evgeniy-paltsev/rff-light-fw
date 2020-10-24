@@ -307,6 +307,8 @@ static void alarm_lamp_mode(uint32_t brightnes)
 {
 	uint32_t led0, led1;
 
+	printk("RFF: set lamp brightnes to %u%\n", brightnes);
+
 	if (brightnes > 100)
 		return;
 
