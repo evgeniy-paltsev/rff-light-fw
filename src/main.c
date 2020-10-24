@@ -10,6 +10,7 @@
 #include "pwm/tim3-pwm.h"
 #include "rtc/rtc-ctl.h"
 #include "brightness-model/brightness-unified-model.h"
+#include "brightness-ops.h"
 #include "button-ctl.h"
 #include "status-led-ctl.h"
 #include "bt/bt-hm11-ctl.h"
@@ -302,6 +303,24 @@ static void send_alarm_info(void)
 	}
 }
 
+static void alarm_lamp_mode(uint32_t brightnes)
+{
+	uint32_t led0, led1;
+
+	if (brightnes > 100)
+		return;
+
+	brightness_log_xlate_to_2(BRIGHTNESS_OFF,
+				  BRIGHTNESS_MAX,
+				  B_LED_PARALLEL,
+				  101, /* 0% to 100% */
+				  brightnes,
+				  &led0, &led1);
+
+	TIM3->CCR4 = led0;
+	TIM3->CCR3 = led1;
+}
+
 void main(void)
 {
 	int ret;
@@ -334,6 +353,8 @@ void main(void)
 			alarm_init_new_new(host_cmd_curr.cmd_u32_param_0);
 		else if (host_cmd_curr.type == HOST_CMD_DISARM_ALARM)
 			disarm_alarm_bt();
+		else if (host_cmd_curr.type == HOST_CMD_LAMP_MODE)
+			alarm_lamp_mode(host_cmd_curr.cmd_u32_param_0);
 		else if (host_cmd_curr.type == HOST_CMD_COMMON_INFO)
 			send_alarm_info();
 		/* Other command (HOST_CMD_PING) doesn't requre special handling

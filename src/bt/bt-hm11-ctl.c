@@ -384,6 +384,26 @@ static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
 		return 0;
 	}
 
+	if (!strncmp("LAMP", rx_buff_ptr, strlen("LAMP")) != 0) {
+		long brightnes_percent = 0;
+
+		printk(HM_PFX "got hostcmd: use as a lamp\n");
+
+		rx_buff_ptr += strlen("LAMP");
+		brightnes_percent = strtol(rx_buff_ptr, &end, 10);
+
+		if (brightnes_percent < 0 || brightnes_percent > 100) {
+			printk(HM_PFX "brightnes not in [0:100]? Huh.\n");
+
+			goto bad_cmd;
+		}
+
+		/* we will send respond later */
+		cmd->cmd_u32_param_0 = brightnes_percent;
+		cmd->type = HOST_CMD_LAMP_MODE;
+		return 0;
+	}
+
 	alarm_hh = strtol(rx_buff_ptr, &end, 10);
 	rx_buff_ptr = end + 1;
 	alarm_mm = strtol(rx_buff_ptr, &end, 10);
