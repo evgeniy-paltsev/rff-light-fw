@@ -18,6 +18,7 @@ west
 ```
 export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
 export ZEPHYR_SDK_INSTALL_DIR=${YOUR_SDK_INSTALL_PATH}/zephyr-sdk-0.11.1
+export ZEPHYR_BASE=${YOUR_ZEPHYR_INSTALL_PATH}/zephyrproject/zephyr
 # in Zephyr root directory
 . ./zephyr-env.sh
 ```
