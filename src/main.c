@@ -301,24 +301,45 @@ static void send_alarm_info(void)
 	}
 }
 
-static void alarm_lamp_mode(uint32_t brightnes)
+static void alarm_lamp_mode(uint32_t brightnes, enum lamp_type type)
 {
 	uint32_t led0, led1;
 
-	printk("RFF: set lamp brightnes to %u\n", brightnes);
+	printk("RFF: set lamp brightnes to %u, %s\n", brightnes,
+		type == LAMP_PARALLEL ? "parallel" :
+		type == LAMP_SEQUENTAL_WARM ? "sequental warm" : "sequental cold");
 
 	if (brightnes > 100)
 		return;
 
+	if (type == LAMP_PARALLEL) {
+		brightness_log_xlate_to_2(BRIGHTNESS_OFF,
+					  BRIGHTNESS_MAX,
+					  B_LED_PARALLEL,
+					  101, /* 0% to 100% */
+					  brightnes,
+					  &led0, &led1);
+
+		TIM3->CCR4 = led0;
+		TIM3->CCR3 = led1;
+
+		return;
+	}
+
 	brightness_log_xlate_to_2(BRIGHTNESS_OFF,
 				  BRIGHTNESS_MAX,
-				  B_LED_PARALLEL,
+				  B_LED_SEQUENTIAL,
 				  101, /* 0% to 100% */
 				  brightnes,
 				  &led0, &led1);
 
-	TIM3->CCR4 = led0;
-	TIM3->CCR3 = led1;
+	if (type == LAMP_SEQUENTAL_WARM) {
+		TIM3->CCR4 = led0;
+		TIM3->CCR3 = led1;
+	} else {
+		TIM3->CCR4 = led1;
+		TIM3->CCR3 = led0;
+	}
 }
 
 void main(void)
@@ -351,7 +372,8 @@ void main(void)
 			continue;
 
 		if (host_pkt_curr.packet_s.command == HOST_CMD_LAMP_MODE)
-			alarm_lamp_mode(host_pkt_curr.packet_s.payload_lamp.brightnes);
+			alarm_lamp_mode(host_pkt_curr.packet_s.payload_lamp.brightnes,
+					host_pkt_curr.packet_s.payload_lamp.lamp_type);
 		else if (host_pkt_curr.packet_s.command == HOST_CMD_SCHEDULE_ALARM)
 			alarm_init_new_new(host_pkt_curr.packet_s.payload_32b);
 		else if (host_pkt_curr.packet_s.command == HOST_CMD_DISARM_ALARM)
