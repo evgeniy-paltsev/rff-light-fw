@@ -318,14 +318,6 @@ int hm11_do_at_cmd(struct hm11_at_cmd *cmd_list)
 	return ret;
 }
 
-/*
- * Host CMD format:
- * ALARM:hh:mm - new alarm where hh:mm is wait time before alarm
- * ALARM:STOP - disarm current alarm
- * ALARM:INFO - info about current alarm
- */
-#define HOSTCMD_PFX	"ALARM:"
-
 static inline bool hm11_status_connected(void)
 {
 	//TODO: FIXME: check status led here
@@ -338,129 +330,110 @@ void hm11_send_cmd_respond(const char *str)
 		uart_receiver_send_string(str);
 }
 
-static int hm11_host_cmd_parse_chedule_alarm(struct host_cmd *cmd)
+static int hm11_bad_hostcmd(bt_host_packet_t *pkt)
 {
-	size_t pfx_sz = strlen(HOSTCMD_PFX);
-//	size_t cmd_sz = pfx_sz + 5;
-	char *rx_buff_ptr = ser.rx_buff, *end;
-	long alarm_hh, alarm_mm;
+	printk(HM_PFX "junk instead of hostcmd: '%02x:%02x:%02x%02x%02x%02x'\n",
+		pkt->packet_raw[0], pkt->packet_raw[1], pkt->packet_raw[2],
+		pkt->packet_raw[3], pkt->packet_raw[4], pkt->packet_raw[5]);
+	hm11_send_cmd_respond("NACK");
+
+	return -EINVAL;
+}
+
+static int hm11_host_pkt_verify(bt_host_packet_t *pkt)
+{
 	char str[RESPOND_BUFF_SZ];
 
-	cmd->type = HOST_CMD_NONE;
+	if (pkt->packet_s.prefix != HOSTPKT_PFX) {
+		printk(HM_PFX "hostcmd prefix mismatch\n");
 
-	if (strncmp(HOSTCMD_PFX, ser.rx_buff, pfx_sz) != 0)
-		goto bad_cmd;
+		return hm11_bad_hostcmd(pkt);
+	}
 
-	if (strlen(ser.rx_buff) < pfx_sz + 3)
-		goto bad_cmd;
+	if (pkt->packet_s.command == HOST_CMD_LAMP_MODE) {
+		printk(HM_PFX "got hostcmd: use as a lamp\n");
 
-	rx_buff_ptr += pfx_sz;
+		uint8_t type = pkt->packet_s.payload_lamp.lamp_type;
 
-	if (!strncmp("STOP", rx_buff_ptr, 4) != 0) {
+		if (type != LAMP_PARALLEL && type != LAMP_SEQUENTAL_COLD && type != LAMP_SEQUENTAL_WARM) {
+			printk(HM_PFX "unknown lamp type\n");
+
+			return hm11_bad_hostcmd(pkt);
+		}
+
+		if (pkt->packet_s.payload_lamp.brightnes > 100) {
+			printk(HM_PFX "brightnes not in [0:100]? Huh.\n");
+
+			return hm11_bad_hostcmd(pkt);
+		}
+
+		return 0;
+	} else if (pkt->packet_s.command == HOST_CMD_PING) {
+		printk(HM_PFX "got hostcmd: ping\n");
+		hm11_send_cmd_respond("ALIVE");
+
+		return 0;
+	} else if (pkt->packet_s.command == HOST_CMD_SCHEDULE_ALARM) {
+		uint32_t sleep_time_s = pkt->packet_s.payload_32b;
+
+		if (sleep_time_s < RISE_TIME_S) {
+			printk(HM_PFX "got hostcmd: set alarm: sleep time < rise time? Huh.\n");
+
+			return hm11_bad_hostcmd(pkt);
+		}
+
+		/* Just in case of TYPO in command */
+		if (sleep_time_s >= 24 * 60 * 60) {
+			printk(HM_PFX "got hostcmd: set alarm: sleep time >= 24 hours? Huh.\n");
+
+			return hm11_bad_hostcmd(pkt);
+		}
+
+		unsigned int alarm_hh, alarm_mm, alarm_ss;
+
+		alarm_hh = sleep_time_s / (60 * 60);
+		alarm_mm = (sleep_time_s % (60 * 60)) / 60;
+		alarm_ss = (sleep_time_s % (60 * 60)) % 60;
+
+		printk(HM_PFX "got hostcmd: wait for alarm for %uh %um %us (%us)\n",
+			alarm_hh, alarm_mm, alarm_ss, sleep_time_s);
+		snprintf(str, RESPOND_BUFF_SZ, "SLEEP %2u:%2u", alarm_hh, alarm_mm);
+		/* TODO: send respond after alarm schedule */
+		hm11_send_cmd_respond(str);
+
+		return 0;
+	} else if (pkt->packet_s.command == HOST_CMD_DISARM_ALARM) {
 		printk(HM_PFX "got hostcmd: stop current alarm\n");
 		/* TODO: send respond later */
 		hm11_send_cmd_respond("STOPPED");
 
-		cmd->cmd_u32_param_0 = 0;
-		cmd->type = HOST_CMD_DISARM_ALARM;
 		return 0;
-	}
-
-	if (!strncmp("PING", rx_buff_ptr, 4) != 0) {
-		printk(HM_PFX "got hostcmd: ping\n");
-		hm11_send_cmd_respond("ALIVE");
-
-		cmd->cmd_u32_param_0 = 0;
-		cmd->type = HOST_CMD_PING;
-		return 0;
-	}
-
-	if (!strncmp("INFO", rx_buff_ptr, 4) != 0) {
+	} else if (pkt->packet_s.command == HOST_CMD_COMMON_INFO) {
 		printk(HM_PFX "got hostcmd: get common info\n");
 
 		/* we will send respond later */
-		cmd->cmd_u32_param_0 = 0;
-		cmd->type = HOST_CMD_COMMON_INFO;
 		return 0;
+	} else {
+		printk(HM_PFX "got hostcmd: unknown\n");
 	}
 
-	if (!strncmp("LAMP", rx_buff_ptr, strlen("LAMP")) != 0) {
-		long brightnes_percent = 0;
-
-		printk(HM_PFX "got hostcmd: use as a lamp\n");
-
-		rx_buff_ptr += strlen("LAMP");
-		brightnes_percent = strtol(rx_buff_ptr, &end, 10);
-
-		if (brightnes_percent < 0 || brightnes_percent > 100) {
-			printk(HM_PFX "brightnes not in [0:100]? Huh.\n");
-
-			goto bad_cmd;
-		}
-
-		/* we will send respond later */
-		cmd->cmd_u32_param_0 = brightnes_percent;
-		cmd->type = HOST_CMD_LAMP_MODE;
-		return 0;
-	}
-
-	alarm_hh = strtol(rx_buff_ptr, &end, 10);
-	rx_buff_ptr = end + 1;
-	alarm_mm = strtol(rx_buff_ptr, &end, 10);
-
-	if (alarm_hh < 0 || alarm_mm < 0) {
-		printk(HM_PFX "negative time? Huh.\n");
-
-		goto bad_cmd;
-	}
-
-	if (alarm_mm >= 60) {
-		printk(HM_PFX "more than 60 minutes? Huh.\n");
-
-		goto bad_cmd;
-	}
-
-	/* Just in case of TYPO in command */
-	if (alarm_hh > 24) {
-		printk(HM_PFX "more than 24 hours? Huh.\n");
-
-		goto bad_cmd;
-	}
-
-	if ((alarm_hh * 60 + alarm_mm) * 60 < RISE_TIME_S) {
-		printk(HM_PFX "less than rise time? Huh.\n");
-
-		goto bad_cmd;
-	}
-
-	printk(HM_PFX "got hostcmd: wait for alarm for %ld:%ld\n", alarm_hh, alarm_mm);
-	snprintf(str, RESPOND_BUFF_SZ, "SLEEP %2ld:%2ld", alarm_hh, alarm_mm);
-	/* TODO: send respond after alarm schedule */
-	hm11_send_cmd_respond(str);
-
-	cmd->cmd_u32_param_0 = (alarm_hh * 60 + alarm_mm) * 60;
-	cmd->type = HOST_CMD_SCHEDULE_ALARM;
-	return 0;
-
-bad_cmd:
-	printk(HM_PFX "junk instead of hostcmd: '%s'\n", ser.rx_buff);
-	hm11_send_cmd_respond("NACK");
-	return -EINVAL;
+	return hm11_bad_hostcmd(pkt);
 }
 
-int hm11_wait_for_host_cmd(struct host_cmd *cmd)
+int hm11_wait_for_host_pkt(bt_host_packet_t *pkt)
 {
 	stack_data_t tmp;
-	size_t pfx_sz = strlen(HOSTCMD_PFX);
-	size_t cmd_sz = pfx_sz + 5;
+	size_t cmd_sz = sizeof(bt_host_packet_t);
 
 	bt_uart_reconfig(cmd_sz);
 	k_stack_pop(&ser.notify_stack, &tmp, K_FOREVER);
 	k_stack_pop(&ser.notify_stack, &tmp, K_MSEC(WAIT_TIME));
-	k_sleep(10);
+	/* We've recieved full packet here so we can stop BT imidiately */
 	bt_uart_stop();
 
-	return hm11_host_cmd_parse_chedule_alarm(cmd);
+	memcpy(pkt, ser.rx_buff, cmd_sz);
+
+	return hm11_host_pkt_verify(pkt);
 }
 
 static void hm11_reset_init(void)

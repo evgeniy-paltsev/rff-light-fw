@@ -19,8 +19,6 @@
 #include "dynamic-assert.h"
 
 
-static struct host_cmd host_cmd_curr;
-
 struct alarm_info {
 	/* alarm thread related structures */
 	struct k_thread alarm_worker_data;
@@ -307,7 +305,7 @@ static void alarm_lamp_mode(uint32_t brightnes)
 {
 	uint32_t led0, led1;
 
-	printk("RFF: set lamp brightnes to %u%\n", brightnes);
+	printk("RFF: set lamp brightnes to %u\n", brightnes);
 
 	if (brightnes > 100)
 		return;
@@ -325,8 +323,6 @@ static void alarm_lamp_mode(uint32_t brightnes)
 
 void main(void)
 {
-	int ret;
-
 	printk("RFF: Hello World! %s\n", CONFIG_BOARD);
 
 	printk("%s alarm params: default SLEEP_TIME_S %u:%u:%u, RISE_TIME %u m, HOLD_TIME %u m\n",
@@ -347,17 +343,20 @@ void main(void)
 	hm11_init();
 
 	while (1) {
-		ret = hm11_wait_for_host_cmd(&host_cmd_curr);
+		bt_host_packet_t host_pkt_curr;
+		int ret;
+
+		ret = hm11_wait_for_host_pkt(&host_pkt_curr);
 		if (ret)
 			continue;
 
-		if (host_cmd_curr.type == HOST_CMD_SCHEDULE_ALARM)
-			alarm_init_new_new(host_cmd_curr.cmd_u32_param_0);
-		else if (host_cmd_curr.type == HOST_CMD_DISARM_ALARM)
+		if (host_pkt_curr.packet_s.command == HOST_CMD_LAMP_MODE)
+			alarm_lamp_mode(host_pkt_curr.packet_s.payload_lamp.brightnes);
+		else if (host_pkt_curr.packet_s.command == HOST_CMD_SCHEDULE_ALARM)
+			alarm_init_new_new(host_pkt_curr.packet_s.payload_32b);
+		else if (host_pkt_curr.packet_s.command == HOST_CMD_DISARM_ALARM)
 			disarm_alarm_bt();
-		else if (host_cmd_curr.type == HOST_CMD_LAMP_MODE)
-			alarm_lamp_mode(host_cmd_curr.cmd_u32_param_0);
-		else if (host_cmd_curr.type == HOST_CMD_COMMON_INFO)
+		else if (host_pkt_curr.packet_s.command == HOST_CMD_COMMON_INFO)
 			send_alarm_info();
 		/* Other command (HOST_CMD_PING) doesn't requre special handling
 		 * and fully processed in hm11_wait_for_host_cmd */
