@@ -305,41 +305,28 @@ static void alarm_lamp_mode(uint32_t brightnes, enum lamp_type type)
 {
 	uint32_t led0, led1;
 
-	printk("RFF: set lamp brightnes to %u, %s\n", brightnes,
-		type == LAMP_PARALLEL ? "parallel" :
-		type == LAMP_SEQUENTAL_WARM ? "sequental warm" : "sequental cold");
-
 	if (brightnes > 100)
 		return;
 
-	if (type == LAMP_PARALLEL) {
-		brightness_log_xlate_to_2(BRIGHTNESS_OFF,
-					  BRIGHTNESS_MAX,
-					  B_LED_PARALLEL,
-					  101, /* 0% to 100% */
-					  brightnes,
-					  &led0, &led1);
-
-		TIM3->CCR4 = led0;
-		TIM3->CCR3 = led1;
-
-		return;
-	}
-
 	brightness_log_xlate_to_2(BRIGHTNESS_OFF,
 				  BRIGHTNESS_MAX,
-				  B_LED_SEQUENTIAL,
+				  type == LAMP_PARALLEL ? B_LED_PARALLEL : B_LED_SEQUENTIAL,
 				  101, /* 0% to 100% */
 				  brightnes,
 				  &led0, &led1);
 
-	if (type == LAMP_SEQUENTAL_WARM) {
-		TIM3->CCR4 = led0;
-		TIM3->CCR3 = led1;
-	} else {
+	if (type == LAMP_SEQUENTAL_COLD) {
 		TIM3->CCR4 = led1;
 		TIM3->CCR3 = led0;
+	} else {
+		TIM3->CCR4 = led0;
+		TIM3->CCR3 = led1;
 	}
+
+	printk("RFF: set lamp brightnes to %u, %s, pwm: %x:%x\n", brightnes,
+		type == LAMP_PARALLEL ? "parallel" :
+		type == LAMP_SEQUENTAL_WARM ? "sequental warm" : "sequental cold",
+		TIM3->CCR4, TIM3->CCR3);
 }
 
 void main(void)
