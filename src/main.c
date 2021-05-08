@@ -104,6 +104,47 @@ static void rtc_watchdog(bool init, uint32_t curr_rtc)
 }
 
 
+/* cached LAMP leds values */
+static volatile uint32_t lamp_led0 = 0, lamp_led1 = 0;
+static volatile bool lamp_alarm_active = false;
+
+#define LAMP_PWM_MIN_TRASHOLD	0x2
+
+static void raw_set_leds(uint32_t led0, uint32_t led1)
+{
+	TIM3->CCR4 = led0;
+	TIM3->CCR3 = led1;
+}
+
+static void alarm_set_leds(uint32_t led0, uint32_t led1)
+{
+	/* use MAX beetwen LAMP and fired ALARM */
+	raw_set_leds(led0 >= lamp_led0 ? led0 : lamp_led0,
+		     led1 >= lamp_led1 ? led1 : lamp_led1);
+}
+
+static void lamp_set_leds(uint32_t led0, uint32_t led1)
+{
+	if (led0 <= LAMP_PWM_MIN_TRASHOLD)
+		led0 = 0;
+
+	if (led1 <= LAMP_PWM_MIN_TRASHOLD)
+		led1 = 0;
+
+	lamp_led0 = led0;
+	lamp_led1 = led1;
+
+	/* allow alarm_sched_worker to setup leds if it is active */
+	if (!lamp_alarm_active)
+		raw_set_leds(led0, led1);
+}
+
+static void lamp_mode_init(void)
+{
+	lamp_led0 = 0;
+	lamp_led1 = 0;
+}
+
 
 static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 {
@@ -117,6 +158,8 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 	io.disarm_time_adjustment = backup_data_get();
 
 	rtc_watchdog(true, rtc_get_time());
+
+	lamp_alarm_active = true;
 
 	do {
 		if (disarm_status_check_and_reset())
@@ -133,14 +176,14 @@ static void alarm_sched_worker(void *nu0, void *nu1, void *nu2)
 					       io.brightnes_curr_value,
 					       &led0, &led1);
 
-		TIM3->CCR4 = led0;
-		TIM3->CCR3 = led1;
+		alarm_set_leds(led0, led1);
 		// printk("RFF: set leds 0x%04x : 0x%04x\n", led0, led1);
 
 		k_sleep(ALARM_SCHED_BACKOFF_MS);
 
 	} while (!alarm_finished(&io));
 
+	lamp_alarm_active = false;
 	printk("RFF: alarm finished at %u\n", rtc_get_time());
 }
 
@@ -315,13 +358,12 @@ static void alarm_lamp_mode(uint32_t brightnes, enum lamp_type type)
 				  brightnes,
 				  &led0, &led1);
 
-	if (type == LAMP_SEQUENTAL_COLD) {
-		TIM3->CCR4 = led1;
-		TIM3->CCR3 = led0;
-	} else {
-		TIM3->CCR4 = led0;
-		TIM3->CCR3 = led1;
-	}
+	/* TODO: set timer */
+
+	if (type == LAMP_SEQUENTAL_COLD)
+		lamp_set_leds(led1, led0);
+	else
+		lamp_set_leds(led0, led1);
 
 	printk("RFF: set lamp brightnes to %u, %s, pwm: %x:%x\n", brightnes,
 		type == LAMP_PARALLEL ? "parallel" :
@@ -344,6 +386,7 @@ void main(void)
 	button_print_debug();
 	bt_uart_init();
 	signal_led_init();
+	lamp_mode_init();
 	timer3_pwm_init();
 
 	check_for_alarm();
