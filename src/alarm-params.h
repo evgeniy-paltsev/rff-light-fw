@@ -10,7 +10,7 @@
 #else
 
 #define RISE_TIME_S		(20 * 60)
-#define HOLD_MAXT_S		(22 * 60)
+#define HOLD_MAXT_S		(52 * 60)
 #define HOLD_MIDT_S		(60 * 60)
 
 #endif /* CONFIG_ALARM_TESTING_SESSION */
