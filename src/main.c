@@ -15,6 +15,7 @@
 #include "status-led-ctl.h"
 #include "bt/bt-hm11-ctl.h"
 #include "alarm-params.h"
+#include "lamp-params.h"
 #include "core-model/core-model.h"
 #include "dynamic-assert.h"
 
@@ -344,6 +345,20 @@ static void send_alarm_info(void)
 	}
 }
 
+/* disarm lamp after LAMP_DURATION_MAX_S of inactivity */
+void lamp_timer_handler(struct k_timer *dummy)
+{
+	lamp_set_leds(0, 0);
+	printk("RFF: LAMP disarmed\n");
+}
+
+K_TIMER_DEFINE(lamp_timer, lamp_timer_handler, NULL);
+
+static void lamp_set_max_timer(void)
+{
+	k_timer_start(&lamp_timer, K_SECONDS(LAMP_DURATION_MAX_S), K_NO_WAIT);
+}
+
 static void alarm_lamp_mode(uint32_t brightnes, enum lamp_type type)
 {
 	uint32_t led0, led1;
@@ -358,7 +373,8 @@ static void alarm_lamp_mode(uint32_t brightnes, enum lamp_type type)
 				  brightnes,
 				  &led0, &led1);
 
-	/* TODO: set timer */
+	/* disarm lamp after LAMP_DURATION_MAX_S of inactivity */
+	lamp_set_max_timer();
 
 	if (type == LAMP_SEQUENTAL_COLD)
 		lamp_set_leds(led1, led0);
